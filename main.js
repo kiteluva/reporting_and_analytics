@@ -22,13 +22,12 @@ import {
     renderSavedChartsTable,
     loadSavedChart,
     clearChartInstances,
-    myChartCanvas // Ensure this is exported from charting.js if used globally
+    myChartCanvas // Ensure this is exported from charting.js
 } from './charting.js';
 
-import { showMessageBox, hideMessageBox, showPromptBox } from './ui-components.js'; // Ensure showPromptBox is imported
+import { showMessageBox, hideMessageBox, showPromptBox } from './ui-components.js';
 
 // --- DOM Elements (Universal / Main App) ---
-// Note: csvFileInput and fileNameDisplay are moved to home.js as they are specific to home.html
 const plotGraphBtn = document.getElementById('plotGraphBtn');
 const getInsightsBtn = document.getElementById('getInsightsBtn');
 const clearAllDataBtn = document.getElementById('clearAllDataBtn');
@@ -37,65 +36,80 @@ const saveGraphBtn = document.getElementById('saveGraphBtn');
 const exportGraphBtn = document.getElementById('exportGraphBtn');
 
 // References to sections on the Home page (for toggling visibility via main.js or home.js)
-// These are primarily managed by home.js now, but kept here for clarity if main.js needed direct access.
 const chartingSection = document.getElementById('chartingSection');
 const mostRecentGraphSection = document.getElementById('mostRecentGraphSection');
 const recentGraphDescription = document.getElementById('recentGraphDescription');
 const recentSavedChartCanvas = document.getElementById('recentSavedChartCanvas'); // Canvas for recent graph
 const savedGraphsTableBody = document.getElementById('savedGraphsTableBody'); // For saved charts table
 
-// --- Global Variables (if any) ---
-// Note: parsedData and headers are imported directly from data-handlers.js now.
+// --- Global Data Ready Promise ---
+// This promise will resolve once the IndexedDB database is open and data is loaded.
+export let dataReadyPromise;
+let resolveDataReady;
+dataReadyPromise = new Promise(resolve => {
+    resolveDataReady = resolve;
+});
+
 
 // --- Function to initialize UI for the current page ---
-// This function runs on DOMContentLoaded and sets up page-specific UI.
 async function initializeUIForCurrentPage() {
-    // 1. Open IndexedDB
-    await openDatabase();
+    try {
+        // 1. Open IndexedDB
+        await openDatabase();
 
-    // 2. Load data from IndexedDB on startup (if any)
-    await loadDataFromIndexedDB();
+        // 2. Load data from IndexedDB on startup (if any)
+        await loadDataFromIndexedDB(); // <--- This populates global parsedData and headers
 
-    // If data is present, enable relevant UI elements
-    if (parsedData.length > 0) {
-        // This part is largely handled by home.js's initializeHomePage,
-        // which now checks for loaded data and enables its buttons.
-        // We keep the populateAxisSelects here for redundancy if charting section is shown directly.
-        populateAxisSelects(parsedData, headers);
-    }
+        // Resolve the dataReadyPromise once data is loaded (or confirmed empty)
+        resolveDataReady();
 
-    // 3. Load active plot configuration (if any)
-    const activePlotConfig = await loadActivePlotConfig();
-    if (activePlotConfig && parsedData.length > 0) {
-        // Automatically draw the last active plot if data is available
-        drawChart(activePlotConfig.chartConfig, parsedData, activePlotConfig.chartConfig.chartType);
-        // Show plotting and save buttons if a chart was active
-        if (chartingSection) chartingSection.classList.remove('hidden');
-        if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
-        if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
-    }
+        // Set the main chart canvas reference in myChartCanvas object
+        myChartCanvas.canvasElement = document.getElementById('myChartCanvas');
 
-    // 4. Load and render saved charts
-    const savedCharts = await loadSavedCharts();
-    if (savedCharts.length > 0) {
-        // Render the table of saved charts
-        renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
-        // Show the saved graphs section
-        if (document.getElementById('savedGraphsSection')) {
-            document.getElementById('savedGraphsSection').classList.remove('hidden');
+        // If data is present, enable relevant UI elements
+        if (parsedData.length > 0) {
+            populateAxisSelects(parsedData, headers);
         }
-        // Load and display the most recent saved chart if it exists
-        const mostRecentChart = savedCharts.sort((a, b) => new Date(b.dateSaved) - new Date(a.dateSaved))[0];
-        if (mostRecentChart && mostRecentGraphSection && recentSavedChartCanvas) {
-            mostRecentGraphSection.classList.remove('hidden');
-            recentGraphDescription.textContent = `Description: ${mostRecentChart.description || 'N/A'} (Saved: ${new Date(mostRecentChart.dateSaved).toLocaleString()})`;
-            drawChart(mostRecentChart.chartConfig, parsedData, mostRecentChart.chartConfig.chartType, recentSavedChartCanvas);
+
+        // 3. Load active plot configuration for 'home-page-plot' (if any)
+        const activePlotConfig = await loadActivePlotConfig('home-page-plot');
+        if (activePlotConfig && parsedData.length > 0) {
+            // Automatically draw the last active plot if data is available
+            drawChart(activePlotConfig.chartConfig, parsedData, activePlotConfig.chartConfig.chartType, myChartCanvas.canvasElement);
+            // Show plotting and save buttons if a chart was active
+            if (chartingSection) chartingSection.classList.remove('hidden');
+            if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
+            if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
         }
-    } else {
-        // Hide saved graphs section if no charts are saved
-        if (document.getElementById('savedGraphsSection')) {
-            document.getElementById('savedGraphsSection').classList.add('hidden');
+
+        // 4. Load and render saved charts
+        // This is crucial to display saved charts on initial load
+        await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
+
+        const savedCharts = await loadSavedCharts();
+        if (savedCharts.length > 0) {
+            // Show the saved graphs section
+            if (document.getElementById('savedGraphsSection')) {
+                document.getElementById('savedGraphsSection').classList.remove('hidden');
+            }
+            // Load and display the most recent saved chart if it exists
+            const mostRecentChart = savedCharts.sort((a, b) => new Date(b.dateSaved) - new Date(a.dateSaved))[0];
+            if (mostRecentChart && mostRecentGraphSection && recentSavedChartCanvas) {
+                mostRecentGraphSection.classList.remove('hidden');
+                recentGraphDescription.textContent = `Description: ${mostRecentChart.description || 'N/A'} (Saved: ${new Date(mostRecentChart.dateSaved).toLocaleString()})`;
+                // Pass the chartConfig directly from the loaded chart, and target recentSavedChartCanvas
+                drawChart(mostRecentChart.chartConfig.chartConfig, parsedData, mostRecentChart.chartConfig.chartType, recentSavedChartCanvas);
+            }
+        } else {
+            // Hide saved graphs section if no charts are saved
+            if (document.getElementById('savedGraphsSection')) {
+                document.getElementById('savedGraphsSection').classList.add('hidden');
+            }
         }
+    } catch (error) {
+        console.error("Error during UI initialization or data loading:", error);
+        showMessageBox(`Failed to initialize application: ${error.message}. Please refresh.`);
+        resolveDataReady(); // Still resolve the promise even if there's an error, to unblock other modules
     }
 }
 
@@ -124,9 +138,13 @@ if (plotGraphBtn) {
             return;
         }
 
+        // Create a chart config object to pass to drawChart
+        const currentChartConfig = { xAxisCol, yAxisCol, chartType, yAxisAggregation };
+
         // Draw the chart and save its configuration as the active plot
-        drawChart({ xAxisCol, yAxisCol, chartType, yAxisAggregation }, parsedData, chartType);
-        saveActivePlotConfig({ xAxisCol, yAxisCol, chartType, yAxisAggregation });
+        drawChart(currentChartConfig, parsedData, chartType, myChartCanvas.canvasElement);
+        // Ensure myChartCanvas.chartConfig is updated by drawChart before saving
+        saveActivePlotConfig('home-page-plot', { chartConfig: myChartCanvas.chartConfig }); // Save the entire myChartCanvas.chartConfig object
 
         // Show save and export buttons after a chart is plotted
         if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
@@ -195,12 +213,13 @@ if (getInsightsBtn) {
 // Listener to clear all data and saved plots
 if (clearAllDataBtn) {
     clearAllDataBtn.addEventListener('click', async () => {
+        // Now using showPromptBox from ui-components.js
         const confirmClear = await showPromptBox("Are you sure you want to clear ALL data and saved plots? This action cannot be undone.");
         if (confirmClear) {
             try {
                 await clearCSVDataFromIndexedDB(); // Clears CSV data and headers
                 await clearAllSavedCharts();       // Clears all saved charts
-                await clearActivePlotConfig();     // Clears active plot config
+                await clearActivePlotConfig('home-page-plot');     // Clears active plot config for this page
 
                 parsedData.splice(0, parsedData.length); // Clear global parsedData array
                 headers.splice(0, headers.length);       // Clear global headers array
@@ -211,8 +230,6 @@ if (clearAllDataBtn) {
                 if (document.getElementById('fileName')) {
                     document.getElementById('fileName').textContent = 'No file selected. Please upload a CSV to begin your analysis.';
                 }
-                // Hide all sections that display data or charts
-                // These are now handled by home.js. We don't need to duplicate here.
                 // Re-initialize home page to reset its state
                 if (typeof initializeHomePage !== 'undefined') {
                     // Call the function from home.js if it's available in scope
@@ -223,6 +240,8 @@ if (clearAllDataBtn) {
                 }
 
                 showMessageBox("All data and saved plots have been cleared!");
+                // Also re-render the saved charts table to reflect the cleared state
+                await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
             } catch (error) {
                 console.error("Error clearing all data:", error);
                 showMessageBox(`Error clearing data: ${error.message}`);
@@ -241,7 +260,7 @@ if (clearAllSavedGraphsBtn) {
             try {
                 await clearAllSavedCharts(); // Clears only saved charts
                 // Re-render the saved charts table (which will now be empty)
-                renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
+                await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById); // <-- Ensure this is awaited
                 showMessageBox("All saved graphs have been cleared!");
             } catch (error) {
                 console.error("Error clearing saved graphs:", error);
@@ -257,7 +276,8 @@ if (clearAllSavedGraphsBtn) {
 // Listener to save a graph
 if (saveGraphBtn) {
     saveGraphBtn.addEventListener('click', async () => {
-        if (!myChartCanvas || !myChartCanvas.chartInstance || !myChartCanvas.chartConfig) {
+        // myChartCanvas now contains chartInstance and chartConfig from the drawChart function
+        if (!myChartCanvas.chartInstance || !myChartCanvas.chartConfig) {
             showMessageBox("No chart is currently plotted to save.");
             return;
         }
@@ -271,7 +291,7 @@ if (saveGraphBtn) {
         }
 
         const chartId = await saveSavedChart({
-            chartConfig: myChartCanvas.chartConfig, // Use the stored config
+            chartConfig: myChartCanvas.chartConfig, // Use the stored myChartCanvas.chartConfig object
             description: description,
             dateSaved: new Date().toISOString()
         });
@@ -279,14 +299,15 @@ if (saveGraphBtn) {
         showMessageBox(`Chart "${description}" saved successfully!`);
         console.log("Chart saved with ID:", chartId);
 
-        renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById); // Refresh the table
+        // Crucial: Re-render the saved charts table after a new chart is saved
+        await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById); // <-- This line was missing await for robust refresh
     });
 }
 
 // Listener to export a graph (universal)
 if (exportGraphBtn) {
     exportGraphBtn.addEventListener('click', () => {
-        if (!myChartCanvas || !myChartCanvas.chartInstance) {
+        if (!myChartCanvas.chartInstance) {
             showMessageBox("No chart is currently plotted to export.");
             return;
         }

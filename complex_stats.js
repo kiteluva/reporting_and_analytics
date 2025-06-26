@@ -2,18 +2,20 @@
 // This file contains logic specific to complex_stats.html,
 // including correlation matrix and multiple linear regression (MLR).
 
-import { populateAxisSelects } from './charting.js'; // Assuming showMessageBox is also exported from charting or ui-components
+import { populateAxisSelects } from './charting.js';
 import { parsedData, headers } from './data-handlers.js'; // Import global data
 import { showMessageBox as showUIMessageBox } from './ui-components.js'; // Alias to avoid conflict if showMessageBox is also in charting.js
+import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
+
 
 // --- DOM Elements specific to complex_stats.html ---
-const calculateCorrelationBtn = document.getElementById('plotCorrelationBtn'); // Corrected ID to match HTML
+const calculateCorrelationBtn = document.getElementById('plotCorrelationBtn');
 const correlationColumnsSelect = document.getElementById('correlationColumnsSelect');
 const correlationMatrixOutput = document.getElementById('correlationMatrixOutput');
 const correlationMatrixContainer = document.getElementById('correlationMatrixContainer'); // Container for the table
 const correlationOrderSelect = document.getElementById('correlationOrderSelect'); // Added for sorting
 
-const calculateRegressionBtn = document.getElementById('runRegressionBtn'); // Corrected ID to match HTML
+const calculateRegressionBtn = document.getElementById('runRegressionBtn');
 const yAxisSelectMLR = document.getElementById('yAxisSelectMLR');
 const xAxisSelectMLR = document.getElementById('xAxisSelectMLR');
 const regressionResultsOutput = document.getElementById('regressionResultsOutput');
@@ -316,8 +318,10 @@ async function getAIInterpretationForRegression() {
 async function initializeComplexStatsPage() {
     console.log("[Complex_Stats.js] Initializing complex stats page UI and listeners.");
 
-    const fileNameDisplay = document.getElementById('fileName');
-    const currentPage = window.location.pathname.split('/').pop();
+    // Await the dataReadyPromise to ensure parsedData and headers are loaded
+    await dataReadyPromise;
+
+    const fileNameDisplay = document.getElementById('fileName'); // Ensure this element is retrieved if needed
 
     // Check if data is loaded. `parsedData` and `headers` are globally imported from data-handlers.js.
     if (parsedData.length > 0 && headers.length > 0) {

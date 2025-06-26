@@ -3,16 +3,21 @@
 
 // Import necessary utility functions and data handlers
 import { showMessageBox } from './ui-components.js';
-import { 
-    saveSavedChart, 
-    loadSavedCharts, 
-    deleteSavedChartById,
-    // CORRECTED IMPORT: Now importing parsedData and headers directly from data-handlers.js
-    parsedData, 
-    headers     
-} from './data-handlers.js'; 
+import {
+    saveSavedChart,
+    loadSavedCharts,
+    deleteSavedChartById, // This is correctly imported from data-handlers.js, not here
+    parsedData,
+    headers
+} from './data-handlers.js';
 
-let currentPlotInstance = null; // For the main interactive plot on myChartCanvas
+// Export myChartCanvas so it can be accessed globally (e.g., by main.js for saving/exporting)
+export let myChartCanvas = {
+    chartInstance: null, // The Chart.js instance
+    chartConfig: null,   // The config used to create the current chart
+    canvasElement: null  // Reference to the actual canvas DOM element
+};
+
 let viewedSavedChartInstance = null; // For displaying a specific saved chart (viewedSavedChartCanvas)
 let myDistributionChart = null; // For the distribution chart on home.html (not always present)
 
@@ -20,9 +25,10 @@ let myDistributionChart = null; // For the distribution chart on home.html (not 
  * Clears all active Chart.js instances.
  */
 export function clearChartInstances() {
-    if (currentPlotInstance) {
-        currentPlotInstance.destroy();
-        currentPlotInstance = null;
+    if (myChartCanvas.chartInstance) {
+        myChartCanvas.chartInstance.destroy();
+        myChartCanvas.chartInstance = null;
+        myChartCanvas.chartConfig = null;
     }
     if (viewedSavedChartInstance) {
         viewedSavedChartInstance.destroy();
@@ -102,12 +108,10 @@ function calculateMode(arr) {
  * Populates the X and Y axis select dropdowns with CSV headers.
  * It also attempts to pre-select sensible defaults based on page.
  * Includes population for Y-axis aggregation select.
- * * NOTE: `parsedData` and `headers` are imported globally at the top of this file.
- * The parameters `hdrs` and `prsdData` are used here to represent the actual
- * data and headers that are passed in, ensuring the function operates on the
- * currently active dataset.
+ * @param {Array<Object>} prsdData - The parsed data array.
+ * @param {Array<string>} hdrs - The headers array.
  */
-export function populateAxisSelects(hdrs, prsdData) { 
+export function populateAxisSelects(prsdData, hdrs) {
     if (typeof Chart === 'undefined') {
         console.error("[populateAxisSelects] Chart.js library is not loaded. Cannot populate axis selects.");
         return;
@@ -125,12 +129,15 @@ export function populateAxisSelects(hdrs, prsdData) {
     const chartTypeSelect = document.getElementById('chartTypeSelect');
     const yAxisAggregationSelect = document.getElementById('yAxisAggregationSelect');
 
-    if (!xAxisSelect || !yAxisSelect || !chartTypeSelect || !yAxisAggregationSelect) return;
+    if (!xAxisSelect || !yAxisSelect || !chartTypeSelect || !yAxisAggregationSelect) {
+        console.warn("[populateAxisSelects] Missing one or more axis/chart type select elements. Skipping population.");
+        return;
+    }
 
     xAxisSelect.innerHTML = '<option value="">Select X-Axis</option>';
     yAxisSelect.innerHTML = '<option value="">Select Y-Axis</option>';
 
-    if (prsdData.length === 0 || hdrs.length === 0) { 
+    if (prsdData.length === 0 || hdrs.length === 0) {
         console.log("[populateAxisSelects] No data available (headers or parsedData empty), dropdowns will remain empty.");
         return;
     }
@@ -196,41 +203,46 @@ export function populateAxisSelects(hdrs, prsdData) {
     let defaultY = '';
     let defaultChartType = 'bar'; // Default chart type for plotting pages
 
+    // Logic for setting defaults based on page is complex and needs `prsdData` and `hdrs`
+    // It's important that this logic is robust to missing data or headers.
+
+    // Try to find a sensible default X-axis
+    defaultX = hdrs.length > 0 ? hdrs[0] : '';
+    // Try to find a sensible default Y-axis (prefer numeric)
+    defaultY = numericHeaders.length > 0 ? numericHeaders[0] : (hdrs.length > 1 ? hdrs[1] : '');
+
+    // Set page-specific defaults if elements exist on the page
     if (isBranchesPage) {
-        defaultX = hdrs.find(h => h.toLowerCase().includes('branch') || h.toLowerCase().includes('location') || h.toLowerCase().includes('region')) ||
-                   hdrs.find(h => prsdData.some(row => typeof row[h] === 'string')) || hdrs[0];
-
-        defaultY = numericHeaders.find(h => prsdData.every(row => typeof row[h] === 'number')) || numericHeaders[0] || hdrs[1] || '';
+        defaultX = hdrs.find(h => h.toLowerCase().includes('branch') || h.toLowerCase().includes('location') || h.toLowerCase().includes('region')) || defaultX;
+        defaultY = numericHeaders.find(h => h.toLowerCase().includes('amount') || h.toLowerCase().includes('value')) || defaultY;
         defaultChartType = 'bar';
-
-        const xAxisFilterInput = document.getElementById('xAxisFilterInput');
-        if (xAxisFilterInput && defaultX) {
-            const uniqueBranches = [...new Set(prsdData.map(row => row[defaultX]))]
-                .filter(val => val !== undefined && val !== null && val !== '')
-                .sort();
-            xAxisFilterInput.value = uniqueBranches.join(', ');
-        }
-
     } else if (isEmployeesPage) {
-        defaultX = hdrs.find(h => h.toLowerCase().includes('employee') || h.toLowerCase().includes('id') || h.toLowerCase().includes('name') || h.toLowerCase().includes('staff')) ||
-                   hdrs.find(h => prsdData.some(row => typeof row[h] === 'string')) || hdrs[0];
-
-        defaultY = numericHeaders.find(h => prsdData.every(row => typeof row[h] === 'number')) || numericHeaders[0] || hdrs[1] || '';
+        defaultX = hdrs.find(h => h.toLowerCase().includes('employee') || h.toLowerCase().includes('name') || h.toLowerCase().includes('staff')) || defaultX;
+        defaultY = numericHeaders.find(h => h.toLowerCase().includes('salary') || h.toLowerCase().includes('pay')) || defaultY;
         defaultChartType = 'bar';
+    } else if (isTimeSeriesPage) {
+        defaultX = hdrs.find(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('time') || h.toLowerCase().includes('period')) || defaultX;
+        defaultY = numericHeaders.find(h => h.toLowerCase().includes('value') || h.toLowerCase().includes('amount')) || defaultY;
+        defaultChartType = 'line';
+    } else if (isComplexStatsPage) {
+        // Defaults for complex stats might be more specific or left to user
+        defaultX = numericHeaders.length > 0 ? numericHeaders[0] : defaultX;
+        defaultY = numericHeaders.length > 1 ? numericHeaders[1] : defaultY;
+        defaultChartType = 'scatter'; // Scatter for initial look at relationships
+    }
 
+    if (xAxisSelect) xAxisSelect.value = defaultX;
+    if (yAxisSelect) yAxisSelect.value = defaultY;
+    if (chartTypeSelect) chartTypeSelect.value = defaultChartType;
+
+    // Handle filter inputs for specific pages (if they exist)
+    if (isBranchesPage || isEmployeesPage) {
         const xAxisFilterInput = document.getElementById('xAxisFilterInput');
         if (xAxisFilterInput && defaultX) {
-            const uniqueEmployees = [...new Set(prsdData.map(row => row[defaultX]))]
-                .filter(val => val !== undefined && val !== null && val !== '')
-                .sort();
-            xAxisFilterInput.value = uniqueEmployees.join(', ');
+            const uniqueValues = [...new Set(prsdData.map(row => String(row[defaultX])))].filter(val => val !== undefined && val !== null && val !== '').sort();
+            xAxisFilterInput.value = uniqueValues.join(', ');
         }
-
     } else if (isTimeSeriesPage) {
-        defaultX = hdrs.find(h => h.toLowerCase().includes('date') || h.toLowerCase().includes('time') || h.toLowerCase().includes('month') || h.toLowerCase().includes('year')) || hdrs[0];
-        defaultY = numericHeaders.find(h => prsdData.every(row => typeof row[h] === 'number')) || numericHeaders[0] || hdrs[1] || '';
-        defaultChartType = 'line';
-
         const startDateInput = document.getElementById('startDateInput');
         const endDateInput = document.getElementById('endDateInput');
         if (startDateInput && endDateInput && defaultX) {
@@ -245,18 +257,9 @@ export function populateAxisSelects(hdrs, prsdData) {
                 endDateInput.value = maxDate;
             }
         }
-    } else { // For home.html and complex_stats.html, try to set sensible defaults without specific page context
-        defaultX = hdrs[0] || '';
-        defaultY = numericHeaders[0] || hdrs.find(h => h !== defaultX) || '';
-        defaultChartType = 'bar'; // Keep bar as default
     }
 
-    if (xAxisSelect) xAxisSelect.value = defaultX;
-    if (yAxisSelect) yAxisSelect.value = defaultY;
-    if (chartTypeSelect) chartTypeSelect.value = defaultChartType;
-
-
-    // Special handling for complex_stats.html dropdowns
+    // Special handling for complex_stats.html dropdowns (multi-selects)
     if (isComplexStatsPage) {
         const correlationColumnsSelect = document.getElementById('correlationColumnsSelect');
         const yAxisSelectMLR = document.getElementById('yAxisSelectMLR');
@@ -304,112 +307,97 @@ export function populateAxisSelects(hdrs, prsdData) {
         }
     }
 
-    console.log("[populateAxisSelects] completed. X-axis default:", xAxisSelect.value, "Y-axis default:", yAxisSelect.value, "Chart Type default:", chartTypeSelect.value);
+    console.log("[populateAxisSelects] completed. X-axis default:", xAxisSelect?.value, "Y-axis default:", yAxisSelect?.value, "Chart Type default:", chartTypeSelect?.value);
 }
 
 
 /**
  * Draws the chart using Chart.js based on selected options, including filtering and aggregation.
- * This function now explicitly targets `myChartCanvas` for the interactive plot.
- * @param {HTMLCanvasElement} myChartCanvas - The canvas element to draw on.
- * @param {HTMLSelectElement} xAxisSelect - The X-axis select element.
- * @param {HTMLSelectElement} yAxisSelect - The Y-axis select element.
- * @param {HTMLSelectElement} chartTypeSelect - The chart type select element.
- * @param {HTMLSelectElement} yAxisAggregationSelect - The Y-axis aggregation select element.
- * @param {HTMLInputElement} xAxisFilterInput - The X-axis filter input element (optional).
- * @param {HTMLInputElement} startDateInput - The start date input element (optional).
- * @param {HTMLInputElement} endDateInput - The end date input element (optional).
- * @param {Array<Object>} currentParsedData - The parsed data array.
- * @param {Array<string>} currentHeaders - The headers array.
- * @param {Function} showMessageBox - Function to display messages.
- * @param {HTMLButtonElement} saveGraphBtn - Save graph button.
- * @param {HTMLButtonElement} exportGraphBtn - Export graph button.
- * @param {HTMLElement} recentGraphDescription - Element to display graph description.
- * @param {HTMLCanvasElement} recentSavedChartCanvas - Canvas for recent saved chart.
+ * This function now takes a chartConfig object directly, making it more flexible.
+ * It also takes an optional targetCanvasElement to draw on, defaulting to myChartCanvas.canvasElement.
+ * @param {Object} chartConfig - Object containing xAxisCol, yAxisCol, chartType, yAxisAggregation.
+ * @param {Array<Object>} data - The parsed data array.
+ * @param {string} typeOverride - Optional: Override chartType from config (e.g., for density).
+ * @param {HTMLCanvasElement} [targetCanvasElement] - Optional: The specific canvas element to draw on.
  */
-export function drawChart(
-    myChartCanvas,
-    xAxisSelect,
-    yAxisSelect,
-    chartTypeSelect,
-    yAxisAggregationSelect,
-    xAxisFilterInput,
-    startDateInput,
-    endDateInput,
-    currentParsedData, // Renamed parameter to avoid conflict with global `parsedData`
-    currentHeaders,    // Renamed parameter to avoid conflict with global `headers`
-    showMessageBox, 
-    saveGraphBtn,
-    exportGraphBtn,
-    recentGraphDescription,
-    recentSavedChartCanvas
-) {
+export function drawChart(chartConfig, data, typeOverride = null, targetCanvasElement = null) {
     if (typeof Chart === 'undefined') {
         console.error("[drawChart] Chart.js library is not loaded. Cannot draw chart.");
         showMessageBox("Error: Charting library not loaded. Please refresh the page. If the problem persists, your browser might have issues loading external scripts.");
         return;
     }
-    // Use the passed parameters `currentParsedData` and `currentHeaders`
-    console.log(`[drawChart] called. Current parsedData length: ${currentParsedData.length}, Headers length: ${currentHeaders.length}`);
 
     const currentPage = window.location.pathname.split('/').pop();
     const isBranchesPage = currentPage === 'branches.html';
     const isEmployeesPage = currentPage === 'employees.html';
     const isTimeSeriesPage = currentPage === 'time-series.html';
-    const isComplexStatsPage = currentPage === 'complex_stats.html';
 
-    let mainPlotCanvas = myChartCanvas;
+    // Determine which canvas to use
+    let canvasToUse = targetCanvasElement || document.getElementById('myChartCanvas');
 
-    if (!mainPlotCanvas) {
-        console.error("[drawChart] Main chart canvas (myChartCanvas) not found for the current page.");
+    if (!canvasToUse) {
+        console.error("[drawChart] Target canvas element not found.");
         return;
     }
 
-    if (currentPlotInstance) {
-        currentPlotInstance.destroy();
-        currentPlotInstance = null;
+    const ctx = canvasToUse.getContext('2d');
+
+    // Destroy existing chart instance on this canvas if it exists
+    if (canvasToUse.chartInstance) {
+        canvasToUse.chartInstance.destroy();
+        canvasToUse.chartInstance = null;
     }
 
-    if (viewedSavedChartInstance) {
-        viewedSavedChartInstance.destroy();
-        viewedSavedChartInstance = null;
-    }
-    const viewedSavedGraphSection = document.getElementById('viewedSavedGraphSection'); // Fetch locally
-    const viewedGraphDescription = document.getElementById('viewedGraphDescription'); // Fetch locally
-    if (viewedSavedGraphSection) {
-        viewedSavedGraphSection.classList.add('hidden');
-        if (viewedGraphDescription) viewedGraphDescription.textContent = '';
+    // Clear the global myChartCanvas reference if this is the main canvas being drawn
+    if (canvasToUse.id === 'myChartCanvas') {
+        clearChartInstances(); // Clears main myChartCanvas.chartInstance
+        myChartCanvas.canvasElement = canvasToUse; // Ensure myChartCanvas has the correct DOM reference
     }
 
+    // Hide viewed saved graph section when plotting a new main chart
+    const viewedSavedGraphSection = document.getElementById('viewedSavedGraphSection');
+    if (viewedSavedGraphSection) viewedSavedGraphSection.classList.add('hidden');
 
-    if (currentParsedData.length === 0 || currentHeaders.length === 0) {
+
+    if (data.length === 0 || headers.length === 0) { // Using global headers as drawChart takes `data` as parameter
         showMessageBox("No data available to plot. Please upload a CSV file on the Home tab.");
-        if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-        if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
-        return;
-    }
-
-    const xAxisColumn = xAxisSelect ? xAxisSelect.value : '';
-    const yAxisColumn = yAxisSelect ? yAxisSelect.value : '';
-    const chartType = chartTypeSelect ? chartTypeSelect.value : 'bar';
-    const yAxisAggregation = yAxisAggregationSelect ? yAxisAggregationSelect.value : 'average';
-
-    if (!xAxisColumn || !yAxisColumn || !currentHeaders.includes(xAxisColumn) || !currentHeaders.includes(yAxisColumn)) {
-        if (currentParsedData.length > 0) {
-            showMessageBox("Please select valid X and Y axis columns from the dropdowns.");
+        // Hide save/export buttons only if it's the main plotting canvas
+        if (canvasToUse.id === 'myChartCanvas') {
+            const saveGraphBtn = document.getElementById('saveGraphBtn');
+            const exportGraphBtn = document.getElementById('exportGraphBtn');
+            if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
+            if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
         }
-        if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-        if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
         return;
     }
 
-    let filteredData = [...currentParsedData];
+    const { xAxisCol, yAxisCol, chartType: configChartType, yAxisAggregation } = chartConfig;
+    const actualChartType = typeOverride || configChartType; // Use override if provided
+
+    // Validate columns
+    if (!xAxisCol || !yAxisCol || !headers.includes(xAxisCol) || !headers.includes(yAxisCol)) {
+        showMessageBox("Please select valid X and Y axis columns.");
+        if (canvasToUse.id === 'myChartCanvas') {
+            const saveGraphBtn = document.getElementById('saveGraphBtn');
+            const exportGraphBtn = document.getElementById('exportGraphBtn');
+            if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
+            if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+        }
+        return;
+    }
+
+    let filteredData = [...data];
+
+    // Apply filtering based on page and available filter inputs
+    const xAxisFilterInput = document.getElementById('xAxisFilterInput');
+    const startDateInput = document.getElementById('startDateInput');
+    const endDateInput = document.getElementById('endDateInput');
 
     if ((isBranchesPage || isEmployeesPage) && xAxisFilterInput) {
         if (xAxisFilterInput.value) {
             const selectedXValues = xAxisFilterInput.value.split(',').map(s => s.trim()).filter(s => s !== '');
             if (selectedXValues.length > 0) {
-                filteredData = filteredData.filter(row => selectedXValues.includes(String(row[xAxisColumn])));
+                filteredData = filteredData.filter(row => selectedXValues.includes(String(row[xAxisCol])));
             }
         }
     } else if (isTimeSeriesPage && startDateInput && endDateInput) {
@@ -419,19 +407,15 @@ export function drawChart(
 
             if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
                 showMessageBox("Invalid start or end date for time series filtering.");
-                if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-                if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
                 return;
             }
             if (startDate.getTime() > endDate.getTime()) {
                 showMessageBox("Start date cannot be after end date.");
-                if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-                if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
                 return;
             }
 
             filteredData = filteredData.filter(row => {
-                const rowDate = new Date(row[xAxisColumn]);
+                const rowDate = new Date(row[xAxisCol]);
                 return !isNaN(rowDate.getTime()) && rowDate >= startDate && rowDate <= endDate;
             });
         }
@@ -439,17 +423,19 @@ export function drawChart(
 
     if (filteredData.length === 0) {
         showMessageBox("No data matches the selected filters. Please adjust your selections.");
-        if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-        if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+        if (canvasToUse.id === 'myChartCanvas') {
+            const saveGraphBtn = document.getElementById('saveGraphBtn');
+            const exportGraphBtn = document.getElementById('exportGraphBtn');
+            if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
+            if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+        }
         return;
     }
 
     let labels;
     let values;
     let dataLabelSuffix = "";
-    let chartConfig;
-
-    const ctx = mainPlotCanvas.getContext('2d');
+    let finalChartConfig; // The chart config for the new Chart.js instance
 
     const commonOptions = {
         responsive: true,
@@ -459,7 +445,7 @@ export function drawChart(
                 beginAtZero: true,
                 title: {
                     display: true,
-                    text: xAxisColumn,
+                    text: xAxisCol,
                     color: '#1f2937',
                     font: { size: 14, weight: 'bold' }
                 },
@@ -474,7 +460,7 @@ export function drawChart(
                 beginAtZero: true,
                 title: {
                     display: true,
-                    text: yAxisColumn,
+                    text: yAxisCol,
                     color: '#1f2937',
                     font: { size: 14, weight: 'bold' }
                 },
@@ -498,7 +484,7 @@ export function drawChart(
                             label += new Intl.NumberFormat().format(context.parsed.y);
                         } else if (context.parsed.pie !== undefined) {
                             label += context.formattedValue;
-                        } else if (context.raw !== undefined && (chartType === 'pie' || chartType === 'doughnut' || chartType === 'polarArea')) {
+                        } else if (context.raw !== undefined && (actualChartType === 'pie' || actualChartType === 'doughnut' || actualChartType === 'polarArea')) {
                             label += new Intl.NumberFormat().format(context.raw);
                         }
                         return label;
@@ -513,7 +499,7 @@ export function drawChart(
             },
             title: {
                 display: true,
-                text: `${yAxisColumn}${dataLabelSuffix} by ${xAxisColumn} (${chartType.charAt(0).toUpperCase() + chartType.slice(1)} Chart)`,
+                text: `${yAxisCol}${dataLabelSuffix} by ${xAxisCol} (${actualChartType.charAt(0).toUpperCase() + actualChartType.slice(1)} Chart)`,
                 color: '#1f2937',
                 font: { size: 16, weight: 'bold' }
             }
@@ -521,14 +507,14 @@ export function drawChart(
     };
 
 
-    if (['pie', 'doughnut', 'polarArea'].includes(chartType)) {
+    if (['pie', 'doughnut', 'polarArea'].includes(actualChartType)) {
         const counts = {};
-        const isYNumeric = currentParsedData.some(row => typeof row[yAxisColumn] === 'number' && !isNaN(row[yAxisColumn]));
+        const isYNumeric = data.some(row => typeof row[yAxisCol] === 'number' && !isNaN(row[yAxisCol]));
 
         filteredData.forEach(row => {
-            const category = String(row[xAxisColumn]);
+            const category = String(row[xAxisCol]);
             if (isYNumeric) {
-                const value = typeof row[yAxisColumn] === 'number' && !isNaN(row[yAxisColumn]) ? row[yAxisColumn] : 0;
+                const value = typeof row[yAxisCol] === 'number' && !isNaN(row[yAxisCol]) ? row[yAxisCol] : 0;
                 counts[category] = (counts[category] || 0) + value;
             } else {
                 counts[category] = (counts[category] || 0) + 1; // Count occurrences
@@ -540,12 +526,12 @@ export function drawChart(
 
         const backgroundColors = labels.map((_, i) => `hsl(${i * 30 % 360}, 70%, 50%)`);
 
-        chartConfig = {
-            type: chartType,
+        finalChartConfig = {
+            type: actualChartType,
             data: {
                 labels: labels,
                 datasets: [{
-                    label: isYNumeric ? `${yAxisColumn} Sum` : `Count of ${xAxisColumn}`,
+                    label: isYNumeric ? `${yAxisCol} Sum` : `Count of ${xAxisCol}`,
                     data: values,
                     backgroundColor: backgroundColors,
                     borderColor: '#fff',
@@ -563,7 +549,7 @@ export function drawChart(
                     },
                     title: {
                         display: true,
-                        text: isYNumeric ? `Sum of ${yAxisColumn} by ${xAxisColumn}` : `Distribution of ${xAxisColumn}`,
+                        text: isYNumeric ? `Sum of ${yAxisCol} by ${xAxisCol}` : `Distribution of ${xAxisCol}`,
                         color: '#1f2937',
                         font: { size: 16, weight: 'bold' }
                     }
@@ -572,16 +558,20 @@ export function drawChart(
             }
         };
         dataLabelSuffix = "";
-    } else if (chartType === 'histogram' || chartType === 'density') {
+    } else if (actualChartType === 'histogram' || actualChartType === 'density') {
         const numericValues = filteredData
-            .map(row => row[yAxisColumn]) // Use Y-axis for histogram values
+            .map(row => row[yAxisCol]) // Use Y-axis for histogram values
             .filter(val => typeof val === 'number' && !isNaN(val))
             .sort((a, b) => a - b);
 
         if (numericValues.length === 0) {
-            showMessageBox(`Cannot create a ${chartType} for non-numeric or empty data in '${yAxisColumn}' after filtering.`);
-            if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-            if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+            showMessageBox(`Cannot create a ${actualChartType} for non-numeric or empty data in '${yAxisCol}' after filtering.`);
+            if (canvasToUse.id === 'myChartCanvas') {
+                const saveGraphBtn = document.getElementById('saveGraphBtn');
+                const exportGraphBtn = document.getElementById('exportGraphBtn');
+                if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
+                if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+            }
             return;
         }
 
@@ -610,12 +600,12 @@ export function drawChart(
         const chartData = bins;
         dataLabelSuffix = " (Frequency)";
 
-        chartConfig = {
+        finalChartConfig = {
             type: 'bar', // Histogram is usually a bar chart
             data: {
                 labels: labels,
                 datasets: [{
-                    label: `${yAxisColumn}${dataLabelSuffix}`,
+                    label: `${yAxisCol}${dataLabelSuffix}`,
                     data: chartData,
                     backgroundColor: 'rgba(79, 70, 229, 0.7)',
                     borderColor: 'rgba(79, 70, 229, 1)',
@@ -629,7 +619,7 @@ export function drawChart(
                         ...commonOptions.scales.x,
                         title: {
                             display: true,
-                            text: `${yAxisColumn} Bins`,
+                            text: `${yAxisCol} Bins`,
                             color: '#1f2937',
                             font: { size: 14, weight: 'bold' }
                         },
@@ -655,44 +645,48 @@ export function drawChart(
             }
         };
 
-        if (chartType === 'density') {
-            chartConfig.type = 'line'; // For density, use line chart
-            chartConfig.data.datasets[0].fill = true;
-            chartConfig.data.datasets[0].tension = 0.4;
-            chartConfig.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.3)';
+        if (actualChartType === 'density') {
+            finalChartConfig.type = 'line'; // For density, use line chart
+            finalChartConfig.data.datasets[0].fill = true;
+            finalChartConfig.data.datasets[0].tension = 0.4;
+            finalChartConfig.data.datasets[0].backgroundColor = 'rgba(79, 70, 229, 0.3)';
             dataLabelSuffix = " (Density)";
         }
         // Update chart title based on actual chart type and aggregation
-        if (chartConfig.options && chartConfig.options.plugins && chartConfig.options.plugins.title) {
-            chartConfig.options.plugins.title.text = `${yAxisColumn}${dataLabelSuffix} Distribution`;
+        if (finalChartConfig.options && finalChartConfig.options.plugins && finalChartConfig.options.plugins.title) {
+            finalChartConfig.options.plugins.title.text = `${yAxisCol}${dataLabelSuffix} Distribution`;
         }
 
-    } else if (chartType === 'scatter') {
-        const isXNumeric = currentParsedData.some(row => typeof row[xAxisColumn] === 'number' && !isNaN(row[xAxisColumn]));
-        const isYNumeric = currentParsedData.some(row => typeof row[yAxisColumn] === 'number' && !isNaN(row[yAxisColumn]));
+    } else if (actualChartType === 'scatter') {
+        const isXNumeric = data.some(row => typeof row[xAxisCol] === 'number' && !isNaN(row[xAxisCol]));
+        const isYNumeric = data.some(row => typeof row[yAxisCol] === 'number' && !isNaN(row[yAxisCol]));
 
         if (!isXNumeric || !isYNumeric) {
-            showMessageBox(`For a Scatter Plot, both X-Axis ('${xAxisColumn}') and Y-Axis ('${yAxisColumn}') must contain numeric data.`);
-            if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-            if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+            showMessageBox(`For a Scatter Plot, both X-Axis ('${xAxisCol}') and Y-Axis ('${yAxisCol}') must contain numeric data.`);
+            if (canvasToUse.id === 'myChartCanvas') {
+                const saveGraphBtn = document.getElementById('saveGraphBtn');
+                const exportGraphBtn = document.getElementById('exportGraphBtn');
+                if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
+                if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
+            }
             return;
         }
 
         const scatterData = filteredData.map(row => ({
-            x: row[xAxisColumn],
-            y: row[yAxisColumn]
+            x: row[xAxisCol],
+            y: row[yAxisCol]
         })).filter(point => typeof point.x === 'number' && typeof point.y === 'number' && !isNaN(point.x) && !isNaN(point.y));
 
         if (scatterData.length === 0) {
-            showMessageBox(`Cannot create a Scatter plot for non-numeric or empty data in '${xAxisColumn}' or '${yAxisColumn}' after filtering.`);
+            showMessageBox(`Cannot create a Scatter plot for non-numeric or empty data in '${xAxisCol}' or '${yAxisCol}' after filtering.`);
             return;
         }
 
-        chartConfig = {
+        finalChartConfig = {
             type: 'scatter',
             data: {
                 datasets: [{
-                    label: `${yAxisColumn} vs ${xAxisColumn}`,
+                    label: `${yAxisCol} vs ${xAxisCol}`,
                     data: scatterData,
                     backgroundColor: 'rgba(79, 70, 229, 0.7)',
                     borderColor: 'rgba(79, 70, 229, 1)',
@@ -702,16 +696,16 @@ export function drawChart(
             options: commonOptions
         };
         // Update chart title based on actual chart type and aggregation
-        if (chartConfig.options && chartConfig.options.plugins && chartConfig.options.plugins.title) {
-            chartConfig.options.plugins.title.text = `${yAxisColumn} vs ${xAxisColumn} (Scatter Plot)`;
+        if (finalChartConfig.options && finalChartConfig.options.plugins && finalChartConfig.options.plugins.title) {
+            finalChartConfig.options.plugins.title.text = `${yAxisCol} vs ${xAxisCol} (Scatter Plot)`;
         }
 
     } else { // Bar, Line, Radar
         const groupedData = {};
 
         filteredData.forEach(row => {
-            const key = String(row[xAxisColumn]);
-            const metricValue = row[yAxisColumn];
+            const key = String(row[xAxisCol]);
+            const metricValue = row[yAxisCol];
             // Only aggregate if Y-axis value is numeric
             if (typeof metricValue === 'number' && !isNaN(metricValue)) {
                 if (!groupedData[key]) {
@@ -734,7 +728,7 @@ export function drawChart(
                 groupedData[key].push(metricValue);
             }
             else {
-                console.warn(`[drawChart] Non-numeric value found for Y-axis '${yAxisColumn}' in group '${key}'. Skipping for aggregation unless 'count' or 'none' is selected.`);
+                console.warn(`[drawChart] Non-numeric value found for Y-axis '${yAxisCol}' in group '${key}'. Skipping for aggregation unless 'count' or 'none' is selected.`);
                 // For non-numeric values, if aggregation is not 'count', skip them.
                 // Or you might want to default to 'count' for non-numeric Y-axis if no other aggregation is picked.
             }
@@ -781,12 +775,12 @@ export function drawChart(
 
         const backgroundColors = labels.map((_, i) => `hsl(${i * 30 % 360}, 70%, 50%)`);
 
-        chartConfig = {
-            type: chartType,
+        finalChartConfig = {
+            type: actualChartType,
             data: {
                 labels: labels,
                 datasets: [{
-                    label: `${yAxisColumn}${dataLabelSuffix}`,
+                    label: `${yAxisCol}${dataLabelSuffix}`,
                     data: values,
                     backgroundColor: backgroundColors,
                     borderColor: 'rgba(79, 70, 229, 1)',
@@ -796,32 +790,48 @@ export function drawChart(
             options: commonOptions
         };
         // Update chart title based on actual chart type and aggregation
-        if (chartConfig.options && chartConfig.options.plugins && chartConfig.options.plugins.title) {
-            chartConfig.options.plugins.title.text = `${yAxisColumn}${dataLabelSuffix} by ${xAxisColumn} (${chartType.charAt(0).toUpperCase() + chartType.slice(1)} Chart)`;
+        if (finalChartConfig.options && finalChartConfig.options.plugins && finalChartConfig.options.plugins.title) {
+            finalChartConfig.options.plugins.title.text = `${yAxisCol}${dataLabelSuffix} by ${xAxisCol} (${actualChartType.charAt(0).toUpperCase() + actualChartType.slice(1)} Chart)`;
         }
     }
 
-    // Attach current instance to the canvas DOM element for easy access (e.g., for saving)
-    mainPlotCanvas.chartInstance = currentPlotInstance = new Chart(ctx, chartConfig);
+    // Set the chart instance and config on the myChartCanvas export object
+    // This allows main.js to access the currently plotted chart
+    if (canvasToUse.id === 'myChartCanvas') { // Only update for the main interactive canvas
+        myChartCanvas.chartInstance = new Chart(ctx, finalChartConfig);
+        myChartCanvas.chartConfig = {
+            xAxisCol,
+            yAxisCol,
+            chartType: actualChartType, // Save the actual type drawn
+            yAxisAggregation,
+            chartConfig: finalChartConfig // Store the full Chart.js config for saving
+        };
 
-    // Make save/export buttons visible if a chart is drawn
-    if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
-    if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
+        // Make save/export buttons visible if a chart is drawn on the main canvas
+        const saveGraphBtn = document.getElementById('saveGraphBtn');
+        const exportGraphBtn = document.getElementById('exportGraphBtn');
+        if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
+        if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
 
-    // Update recent graph description
-    if (recentGraphDescription) {
-        recentGraphDescription.textContent = `Displaying: ${chartConfig.options.plugins.title.text}`;
+        // Update recent graph description (if applicable to the main chart)
+        const recentGraphDescription = document.getElementById('recentGraphDescription');
+        if (recentGraphDescription) {
+            recentGraphDescription.textContent = `Displaying: ${finalChartConfig.options.plugins.title.text}`;
+        }
+    } else { // For other canvases like recentSavedChartCanvas, just create the instance
+        canvasToUse.chartInstance = new Chart(ctx, finalChartConfig);
     }
-    // Render to a persistent canvas if available
-    if (recentSavedChartCanvas) {
+
+    // Render to a persistent canvas (recentSavedChartCanvas) if it's not the current canvas and needed
+    const recentSavedChartCanvas = document.getElementById('recentSavedChartCanvas');
+    if (recentSavedChartCanvas && canvasToUse.id !== 'recentSavedChartCanvas' && canvasToUse.id === 'myChartCanvas') {
         const recentCtx = recentSavedChartCanvas.getContext('2d');
-        if (window.recentChartInstance) { // Destroy previous instance if exists
-            window.recentChartInstance.destroy();
+        if (recentSavedChartCanvas.chartInstance) { // Destroy previous instance if exists
+            recentSavedChartCanvas.chartInstance.destroy();
         }
         // Clone the config to avoid modifying the active chart's config
-        const recentChartConfig = JSON.parse(JSON.stringify(chartConfig));
-        // You might want to simplify options for the small persistent view if needed
-        window.recentChartInstance = new Chart(recentCtx, recentChartConfig);
+        const recentChartConfig = JSON.parse(JSON.stringify(finalChartConfig));
+        recentSavedChartCanvas.chartInstance = new Chart(recentCtx, recentChartConfig);
     }
     console.log("[drawChart] Chart drawn successfully.");
 }
@@ -851,26 +861,17 @@ export async function renderSavedChartsTable(savedGraphsTableBody, loadChartCall
         savedCharts.forEach(chart => {
             // Safely access chartConfig properties to get x and y axis names
             // Use optional chaining and fallback for robustness
-            const xAxisLabel = chart.chartConfig?.options?.scales?.x?.title?.text || 'N/A';
-            const yAxisLabel = chart.chartConfig?.options?.scales?.y?.title?.text || 'N/A';
-            const chartType = chart.chartConfig?.type || 'N/A';
-
-            // Extract aggregation from the label if possible, or mark as N/A
-            // The regex matches text in parentheses, e.g., "(Sum)"
-            const yAxisAggMatch = yAxisLabel.match(/\((.*?)\)/);
-            // If a match is found, take the captured group (index 1), otherwise 'None'
-            const yAxisAggregationDisplay = yAxisAggMatch ? yAxisAggMatch[1] : 'None';
-
-            // Clean the labels by removing the aggregation suffix for display
-            const cleanXAxisLabel = xAxisLabel.replace(/\s\(.*\)/, '');
-            const cleanYAxisLabel = yAxisLabel.replace(/\s\(.*\)/, '');
+            const xAxisLabel = chart.chartConfig?.xAxisCol || 'N/A';
+            const yAxisLabel = chart.chartConfig?.yAxisCol || 'N/A';
+            const chartType = chart.chartConfig?.chartType || 'N/A';
+            const yAxisAggregationDisplay = chart.chartConfig?.yAxisAggregation || 'None';
 
             const row = savedGraphsTableBody.insertRow();
             row.className = 'hover:bg-blue-50'; // Tailwind class for hover effect
             row.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${chart.id}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${cleanXAxisLabel}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${cleanYAxisLabel} (${yAxisAggregationDisplay})</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${xAxisLabel}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${yAxisLabel} (${yAxisAggregationDisplay})</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${chartType.charAt(0).toUpperCase() + chartType.slice(1)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button class="text-indigo-600 hover:text-indigo-900 view-chart-btn" data-chart-id="${chart.id}">View</button>
@@ -939,7 +940,7 @@ export async function loadSavedChart(chartId) {
 
         // Recreate the chart using the saved config
         // Note: Chart.js config needs to be parsed if stored as a string or cloned to avoid reference issues
-        const chartConfig = JSON.parse(JSON.stringify(chartToLoad.chartConfig));
+        const chartConfig = JSON.parse(JSON.stringify(chartToLoad.chartConfig.chartConfig)); // Access the nested chartConfig
 
         viewedSavedChartInstance = new Chart(ctx, chartConfig);
         console.log(`[Charting] Loaded and displayed saved chart with ID: ${chartId}`);

@@ -11,13 +11,15 @@ import {
 } from './data-handlers.js';
 import {
     populateAxisSelects,
-    drawChart, // Still used for custom plotting (if implemented in main.js/charting.js for home page)
+    drawChart,
     clearChartInstances,
-    renderSavedChartsTable, // Assuming you'll want to render saved charts on home page too
+    renderSavedChartsTable,
     loadSavedChart,
-    deleteSavedChartById,
     myChartCanvas // Global reference to the main plotting canvas instance
 } from './charting.js';
+
+// Import dataReadyPromise from main.js
+import { dataReadyPromise } from './main.js';
 
 // --- DOM Elements specific to home.html ---
 const csvFileInput = document.getElementById('csvFile');
@@ -91,8 +93,8 @@ async function handleCSVFileUpload(event) {
                 showDataOverviewBtn.disabled = false;
                 showPlottingSectionBtn.disabled = false;
 
-                // Automatically show the data overview after successful upload
-                // showDataOverviewBtn.click(); // Removed auto-click as per user request to separate actions
+                // Automatically update and show data overview sections after a new file is uploaded
+                updateAndShowDataOverview();
 
             } catch (error) {
                 console.error("Error processing CSV:", error);
@@ -120,6 +122,38 @@ function hideAllAnalyticalSections() {
     if (chartingSection) chartingSection.classList.add('hidden');
     if (mostRecentGraphSection) mostRecentGraphSection.classList.add('hidden');
     if (savedGraphsSection) savedGraphsSection.classList.add('hidden');
+}
+
+/**
+ * Updates and shows the data overview sections (Data Head, Descriptive Statistics, Column Distribution).
+ * This function can be called after data is loaded/updated to refresh the display.
+ */
+function updateAndShowDataOverview() {
+    if (parsedData.length > 0) {
+        // Show data overview sections
+        if (dataHeadSection) dataHeadSection.classList.remove('hidden');
+        if (descriptiveStatisticsSection) descriptiveStatisticsSection.classList.remove('hidden');
+        if (columnDistributionSection) columnDistributionSection.classList.remove('hidden');
+
+        // Populate and draw relevant data
+        populateDataHeadTable(dataHeadTable, parsedData, headers);
+        populateStatisticsTable(statisticsTable, parsedData, headers);
+        populateDistributionColumnSelect(distributionColumnSelect, headers, parsedData);
+
+        // Draw initial distribution chart if a column is selected
+        if (distributionColumnSelect.value) {
+            drawColumnDistributionChart(parsedData, distributionColumnSelect.value);
+        } else if (headers.length > 0) { // Select the first numerical column if available
+            const firstNumericalHeader = headers.find(h => parsedData.some(row => typeof row[h] === 'number' && !isNaN(row[h])));
+            if (firstNumericalHeader) {
+                distributionColumnSelect.value = firstNumericalHeader;
+                drawColumnDistributionChart(parsedData, firstNumericalHeader);
+            }
+        }
+    } else {
+        // If no data, hide these sections
+        hideAllAnalyticalSections();
+    }
 }
 
 
@@ -151,7 +185,8 @@ function populateDataHeadTable(tableElement, data, headers) {
         headers.forEach(header => {
             const td = tr.insertCell();
             td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
-            td.textContent = rowData[header];
+            // Display values directly, convert to string if not already
+            td.textContent = String(rowData[header]);
         });
     }
 }
@@ -175,14 +210,20 @@ function populateStatisticsTable(tableElement, data, headers) {
 
     // Calculate and populate statistics
     const tbody = tableElement.createTBody();
-    headers.forEach((header, index) => {
-        // Only calculate for numerical columns
-        const columnValues = data.map(row => row[header]).filter(value => typeof value === 'number');
+    let rowIndex = 0; // To handle zebra stripping correctly for displayed rows
+    headers.forEach(header => {
+        // Collect all numerical values for the current header
+        const columnValues = data
+            .map(row => row[header])
+            .filter(value => typeof value === 'number' && !isNaN(value)); // Ensure values are numbers and not NaN
 
+        // Only calculate and display for numerical columns with at least one value
         if (columnValues.length > 0) {
             const tr = tbody.insertRow();
-            tr.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            tr.className = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+            rowIndex++; // Increment row index for stripping
 
+            // Column Name Cell
             tr.insertCell().outerHTML = `<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${header}</td>`;
 
             const count = columnValues.length;
@@ -195,7 +236,7 @@ function populateStatisticsTable(tableElement, data, headers) {
                 median = count % 2 === 0 ? (sortedValues[mid - 1] + sortedValues[mid]) / 2 : sortedValues[mid];
             }
 
-            // Mode calculation (can have multiple modes)
+            // Mode calculation (can have multiple modes, display first or all joined)
             const frequencyMap = {};
             columnValues.forEach(val => {
                 frequencyMap[val] = (frequencyMap[val] || 0) + 1;
@@ -210,37 +251,59 @@ function populateStatisticsTable(tableElement, data, headers) {
                     modes.push(key);
                 }
             }
-            const mode = modes.join(', '); // Join multiple modes with comma
+            const mode = modes.length > 0 ? modes.join(', ') : 'N/A'; // Handle no mode if all unique
 
+
+            // Standard Deviation (sample standard deviation)
             const stdDev = count > 1 ? Math.sqrt(columnValues.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / (count - 1)) : 0;
-            const min = count > 0 ? Math.min(...columnValues) : 0;
-            const max = count > 0 ? Math.max(...columnValues) : 0;
+            const min = count > 0 ? Math.min(...columnValues) : 'N/A';
+            const max = count > 0 ? Math.max(...columnValues) : 'N/A';
 
+            // Populate cells with calculated statistics
             tr.insertCell().textContent = count.toFixed(0);
             tr.insertCell().textContent = mean.toFixed(2);
             tr.insertCell().textContent = median.toFixed(2);
-            tr.insertCell().textContent = mode;
+            tr.insertCell().textContent = mode; // Mode might be string or number
             tr.insertCell().textContent = stdDev.toFixed(2);
-            tr.insertCell().textContent = min.toFixed(2);
-            tr.insertCell().textContent = max.toFixed(2);
+            tr.insertCell().textContent = typeof min === 'number' ? min.toFixed(2) : min;
+            tr.insertCell().textContent = typeof max === 'number' ? max.toFixed(2) : max;
         }
     });
+    // If no numerical columns were processed, display a message
+    if (tbody.rows.length === 0) {
+        const tr = tbody.insertRow();
+        tr.innerHTML = '<td colspan="8" class="px-6 py-4 text-center text-gray-500 italic">No numerical columns found for descriptive statistics.</td>';
+    }
 }
 
 // Function to populate the column distribution select dropdown
 function populateDistributionColumnSelect(selectElement, headers, data) {
     if (!selectElement) return;
     selectElement.innerHTML = '<option value="">Select a column</option>'; // Default option
-    headers.forEach(header => {
-        // Only add numerical columns to the distribution select
-        const isNumerical = data.some(row => typeof row[header] === 'number');
-        if (isNumerical) {
-            const option = document.createElement('option');
-            option.value = header;
-            option.textContent = header;
-            selectElement.appendChild(option);
-        }
+    const numericHeaders = headers.filter(header =>
+        data.some(row => typeof row[header] === 'number' && !isNaN(row[header]))
+    );
+
+    if (numericHeaders.length === 0) {
+        const option = document.createElement('option');
+        option.value = "";
+        option.textContent = "No numerical columns available";
+        option.disabled = true;
+        selectElement.appendChild(option);
+        return;
+    }
+
+    numericHeaders.forEach(header => {
+        const option = document.createElement('option');
+        option.value = header;
+        option.textContent = header;
+        selectElement.appendChild(option);
     });
+
+    // Automatically select the first numerical column if available and no selection made
+    if (selectElement.value === "" && numericHeaders.length > 0) {
+        selectElement.value = numericHeaders[0];
+    }
 }
 
 // Chart.js instance for distribution chart
@@ -256,7 +319,7 @@ function drawColumnDistributionChart(data, columnName) {
         return;
     }
 
-    const numericalValues = data.map(row => row[columnName]).filter(value => typeof value === 'number');
+    const numericalValues = data.map(row => row[columnName]).filter(value => typeof value === 'number' && !isNaN(value));
 
     if (numericalValues.length === 0) {
         showMessageBox(`Column "${columnName}" contains no numerical data for distribution chart.`);
@@ -275,8 +338,14 @@ function drawColumnDistributionChart(data, columnName) {
     // Determine min and max for binning
     const minValue = Math.min(...numericalValues);
     const maxValue = Math.max(...numericalValues);
-    const binCount = Math.ceil(Math.sqrt(numericalValues.length)); // Simple heuristic for bin count
-    const binSize = (maxValue - minValue) / binCount;
+    const binCount = Math.min(20, Math.max(5, Math.ceil(Math.sqrt(numericalValues.length)))); // Min 5, Max 20 bins
+    const range = maxValue - minValue;
+    let binSize = range === 0 ? 1 : range / binCount;
+
+    // Adjust binSize slightly if range is very small or zero to avoid infinite loop / too many bins
+    if (binSize === 0) {
+        binSize = 0.1; // Small default bin size if all values are the same
+    }
 
     // Create bins
     const bins = Array(binCount).fill(0);
@@ -285,13 +354,16 @@ function drawColumnDistributionChart(data, columnName) {
     for (let i = 0; i < binCount; i++) {
         const lowerBound = minValue + i * binSize;
         const upperBound = minValue + (i + 1) * binSize;
-        labels.push(`${lowerBound.toFixed(2)}-${upperBound.toFixed(2)}`);
+        labels.push(`${lowerBound.toFixed(2)} - ${upperBound.toFixed(2)}`);
     }
 
     numericalValues.forEach(value => {
         let binIndex = Math.floor((value - minValue) / binSize);
-        if (binIndex >= binCount) {
-            binIndex = binCount - 1; // Put max value in the last bin
+        if (binIndex >= binCount) { // Ensure the maximum value falls into the last bin
+            binIndex = binCount - 1;
+        }
+        if (binIndex < 0) { // Ensure minimum value falls into the first bin
+            binIndex = 0;
         }
         bins[binIndex]++;
     });
@@ -317,7 +389,10 @@ function drawColumnDistributionChart(data, columnName) {
                     title: {
                         display: true,
                         text: columnName
-                    }
+                    },
+                    // For histograms, bars should ideally touch
+                    barPercentage: 1.0,
+                    categoryPercentage: 1.0,
                 },
                 y: {
                     title: {
@@ -342,7 +417,10 @@ function drawColumnDistributionChart(data, columnName) {
 
 
 // --- Main Initialization for home.html elements ---
-function initializeHomePage() {
+async function initializeHomePage() {
+    // Await the dataReadyPromise to ensure parsedData and headers are loaded
+    await dataReadyPromise;
+
     // Attach file input listener
     if (csvFileInput) {
         csvFileInput.addEventListener('change', handleCSVFileUpload);
@@ -351,31 +429,8 @@ function initializeHomePage() {
     // Attach button listeners for showing/hiding sections
     if (showDataOverviewBtn) {
         showDataOverviewBtn.addEventListener('click', () => {
-            if (parsedData.length > 0) {
-                hideAllAnalyticalSections();
-                // Show data overview sections
-                if (dataHeadSection) dataHeadSection.classList.remove('hidden');
-                if (descriptiveStatisticsSection) descriptiveStatisticsSection.classList.remove('hidden');
-                if (columnDistributionSection) columnDistributionSection.classList.remove('hidden');
-
-                // Populate and draw relevant data if not already done or if data changed
-                populateDataHeadTable(dataHeadTable, parsedData, headers);
-                populateStatisticsTable(statisticsTable, parsedData, headers);
-                populateDistributionColumnSelect(distributionColumnSelect, headers, parsedData);
-                // Draw initial distribution chart if a column is selected
-                if (distributionColumnSelect.value) {
-                    drawColumnDistributionChart(parsedData, distributionColumnSelect.value);
-                } else if (headers.length > 0) { // Select the first numerical column if available
-                    const firstNumericalHeader = headers.find(h => parsedData.some(row => typeof row[h] === 'number'));
-                    if (firstNumericalHeader) {
-                        distributionColumnSelect.value = firstNumericalHeader;
-                        drawColumnDistributionChart(parsedData, firstNumericalHeader);
-                    }
-                }
-
-            } else {
-                showMessageBox('No data loaded. Please upload a CSV file first.');
-            }
+            hideAllAnalyticalSections(); // Hide all first
+            updateAndShowDataOverview(); // Then show/update data overview
         });
     }
 
@@ -407,25 +462,17 @@ function initializeHomePage() {
     // Initial state: hide all analytical sections
     hideAllAnalyticalSections();
 
-    // Initially disable buttons until data is loaded
-    showDataOverviewBtn.disabled = true;
-    showPlottingSectionBtn.disabled = true;
-
-    // Check if data is already loaded (e.g., from IndexedDB on page refresh)
-    // This part ensures persistence. main.js's initializeUIForCurrentPage
-    // likely loads data into `parsedData` and `headers` from IndexedDB.
-    // If data is present on load, enable buttons and show overview.
-    loadDataFromIndexedDB().then(() => {
-        if (parsedData.length > 0) {
-            fileNameDisplay.textContent = `File loaded (from IndexedDB): ${localStorage.getItem('csvPlotterFileName') || 'Unnamed File'}`;
-            showDataOverviewBtn.disabled = false;
-            showPlottingSectionBtn.disabled = false;
-            // Removed auto-click of showDataOverviewBtn.click() here as per user request
-        }
-    }).catch(error => {
-        console.error("Error loading data from IndexedDB on page load:", error);
-        // Do nothing specific, leave buttons disabled.
-    });
+    // After dataReadyPromise resolves, check if data is loaded and enable buttons
+    if (parsedData.length > 0) {
+        fileNameDisplay.textContent = `File loaded (from IndexedDB): ${localStorage.getItem('csvPlotterFileName') || 'Unnamed File'}`;
+        showDataOverviewBtn.disabled = false;
+        showPlottingSectionBtn.disabled = false;
+        updateAndShowDataOverview(); // Automatically show data overview if data is present on load
+    } else {
+        fileNameDisplay.textContent = 'No file selected. Please upload a CSV to begin your analysis.';
+        showDataOverviewBtn.disabled = true;
+        showPlottingSectionBtn.disabled = true;
+    }
 }
 
 // Attach the initialization function to the DOMContentLoaded event

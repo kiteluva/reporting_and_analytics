@@ -1,0 +1,230 @@
+/* Universal Styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+body {
+    font-family: 'Inter', sans-serif;
+    /* Universal background: seamless blend of black, brown, and white */
+    background: linear-gradient(to right, #a08e8e 0%, #b5b8d2 50%, #708f71 100%);
+    color: #06c8fe; /* Default text color for body */
+    margin: 0;
+    padding: 0;
+}
+
+/* Header, Nav Bar, and Main Content Area Background */
+/* Smooth gradient transparent grey */
+.nav-background,
+.main-content-area,
+.content-section-background {
+    background: rgba(128, 128, 128, 0.1); /* Slightly transparent grey */
+    backdrop-filter: blur(5px); /* Optional: adds a subtle blur effect */
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Light border for definition */
+}
+
+/* Titles and Subtitles Styling */
+h1, h2, h3, .section-title {
+    font-weight: 700; /* Bold text */
+    /* Colors appropriate to the background - using a dark gray that stands out on the transparent grey */
+    color: #06f7ff; /* Changed from #4a5568 to a more vibrant cyan for section titles */
+}
+
+/* Navigation Bar Styling */
+.nav-background {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 1rem;
+    border-radius: 0.75rem; /* Rounded-xl for nav */
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* Shadow-xl for nav */
+}
+
+.nav-link {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem; /* Rounded-lg for links */
+    font-weight: 600; /* Semibold */
+    color: #000000; /* Dark gray for inactive links */
+    transition: background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+.nav-link:hover {
+    background-color: #e2e8f0; /* Gray-200 on hover */
+    color: #2d3748; /* Darker gray on hover */
+}
+
+.nav-link.active {
+    color: #000000; /* Indigo-700 for active link */
+    background-color: #4b6770; /* Indigo-100 for active link */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Subtle shadow for active link */
+}
+
+/* General inputs and selects */
+input[type="file"],
+select,
+input[type="text"],
+input[type="date"] {
+    border-radius: 0.5rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input[type="file"]:focus,
+select:focus,
+input[type="text"]:focus,
+input[type="date"]:focus {
+    border-color: #6366f1; /* Indigo-500 */
+    box-shadow: 0 0 0 1px #6366f1, 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .main-container {
+        padding: 1rem;
+    }
+    h1 {
+        font-size: 2rem;
+    }
+    .nav-background {
+        flex-direction: column;
+        padding: 0.75rem;
+    }
+    .nav-background a {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .nav-background a:last-child {
+        margin-bottom: 0;
+    }
+}
+
+/* Custom Alert Message Box */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    display: none; /* Hidden by default */
+    backdrop-filter: blur(3px);
+}
+
+.message-box {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+    display: none; /* Hidden by default */
+    color: #333;
+}
+
+.message-box p {
+    margin-bottom: 20px;
+    font-size: 1.1em;
+}
+
+.message-box button {
+    background-color: #6366f1;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.2s ease;
+}
+
+.message-box button:hover {
+    background-color: #4f46e5;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    border: 4px solid #f3f3f3; /* Light grey */
+    border-top: 4px solid #6366f1; /* Blue */
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto; /* Center the spinner */
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Table styling */
+#dataHeadTable thead, #statisticsTable thead, #savedGraphsTable thead {
+    background-color: #e0e7ff; /* Light indigo */
+}
+
+#dataHeadTable th, #statisticsTable th, #savedGraphsTable th {
+    padding: 12px 24px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #4338ca; /* Darker indigo */
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#dataHeadTable td, #statisticsTable td, #savedGraphsTable td {
+    padding: 10px 24px;
+    font-size: 0.875rem;
+    color: #374151; /* Dark gray */
+}
+
+#dataHeadTable tbody tr:nth-child(even), #statisticsTable tbody tr:nth-child(even), #savedGraphsTable tbody tr:nth-child(even) {
+    background-color: #f9fafb; /* Lighter gray for even rows */
+}
+
+#dataHeadTable tbody tr:hover, #statisticsTable tbody tr:hover, #savedGraphsTable tbody tr:hover {
+    background-color: #eff6ff; /* Lightest blue on hover */
+}
+
+#correlationMatrixContainer table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+#correlationMatrixContainer th,
+#correlationMatrixContainer td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+}
+
+#correlationMatrixContainer th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+}
+
+#correlationMatrixContainer td {
+    background-color: #fff;
+}
+
+/* Color coding for correlation values */
+.correlation-positive {
+    background-color: #d4edda; /* Light green */
+    color: #155724; /* Dark green */
+}
+
+.correlation-negative {
+    background-color: #f8d7da; /* Light red */
+    color: #721c24; /* Dark red */
+}
+
+.correlation-neutral {
+    background-color: #e2e3e5; /* Light grey */
+    color: #383d41; /* Dark grey */
+}

@@ -21,10 +21,11 @@ import {
     drawChart,
     renderSavedChartsTable,
     loadSavedChart,
-    clearChartInstances
+    clearChartInstances,
+    myChartCanvas // Ensure this is exported from charting.js if used globally
 } from './charting.js';
 
-import { showMessageBox, hideMessageBox } from './ui-components.js';
+import { showMessageBox, hideMessageBox, showPromptBox } from './ui-components.js'; // Ensure showPromptBox is imported
 
 // --- DOM Elements (Universal / Main App) ---
 // Note: csvFileInput and fileNameDisplay are moved to home.js as they are specific to home.html
@@ -35,374 +36,233 @@ const clearAllSavedGraphsBtn = document.getElementById('clearAllSavedGraphsBtn')
 const saveGraphBtn = document.getElementById('saveGraphBtn');
 const exportGraphBtn = document.getElementById('exportGraphBtn');
 
-// Elements that might be present on specific pages (but their direct manipulation will be in page-specific JS)
-// Moved from here: dataHeadSection, dataHeadTable, descriptiveStatisticsSection, statisticsTable, columnDistributionSection, distributionColumnSelect, distributionChartCanvas, showDataOverviewBtn, showPlottingSectionBtn
-// These are now handled by their respective page-specific JS files.
-
-const myChartCanvas = document.getElementById('myChartCanvas'); // Main canvas for plotting on plot pages
-const xAxisSelect = document.getElementById('xAxisSelect');
-const yAxisSelect = document.getElementById('yAxisSelect');
-const chartTypeSelect = document.getElementById('chartTypeSelect');
-const yAxisAggregationSelect = document.getElementById('yAxisAggregationSelect');
-
-const xAxisFilterInput = document.getElementById('xAxisFilterInput'); // For Branches/Employees
-const startDateInput = document.getElementById('startDateInput'); // For Time Series
-const endDateInput = document.getElementById('endDateInput'); // For Time Series
-
+// References to sections on the Home page (for toggling visibility via main.js or home.js)
+// These are primarily managed by home.js now, but kept here for clarity if main.js needed direct access.
+const chartingSection = document.getElementById('chartingSection');
 const mostRecentGraphSection = document.getElementById('mostRecentGraphSection');
 const recentGraphDescription = document.getElementById('recentGraphDescription');
-const recentSavedChartCanvas = document.getElementById('recentSavedChartCanvas');
+const recentSavedChartCanvas = document.getElementById('recentSavedChartCanvas'); // Canvas for recent graph
+const savedGraphsTableBody = document.getElementById('savedGraphsTableBody'); // For saved charts table
 
-const savedGraphsSection = document.getElementById('savedGraphsSection');
-const savedGraphsTableBody = document.getElementById('savedGraphsTableBody');
+// --- Global Variables (if any) ---
+// Note: parsedData and headers are imported directly from data-handlers.js now.
 
-const viewedSavedGraphSection = document.getElementById('viewedSavedGraphSection');
-const viewedGraphDescription = document.getElementById('viewedGraphDescription');
-const viewedSavedChartCanvas = document.getElementById('viewedSavedChartCanvas');
-
-const insightsOutput = document.getElementById('insightsOutput');
-const insightsText = document.getElementById('insightsText');
-const insightsLoading = document.getElementById('insightsLoading');
-
-
-// --- Global Data Variables (now strictly imported from data-handlers.js) ---
-// No longer 'export let globalParsedData = []' here.
-// 'parsedData' and 'headers' are imported directly from './data-handlers.js' and will be updated there.
-
-
-// --- Service Worker Registration ---
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./worker.js')
-            .then(registration => {
-                console.log('[Service Worker] Registered with scope:', registration.scope);
-            })
-            .catch(error => {
-                console.error('[Service Worker] Registration failed:', error);
-            });
-    });
-}
-
-// --- Initialization Functions ---
-
-/**
- * Initializes the UI based on the current HTML page.
- * Hides/shows relevant sections and populates dropdowns.
- * This function also triggers the loading of data from IndexedDB.
- */
+// --- Function to initialize UI for the current page ---
+// This function runs on DOMContentLoaded and sets up page-specific UI.
 async function initializeUIForCurrentPage() {
-    console.log("[Main] Initializing UI for current page...");
-    const currentPage = window.location.pathname.split('/').pop();
+    // 1. Open IndexedDB
+    await openDatabase();
 
-    // Hide all main content sections by default and then show only relevant ones
-    document.querySelectorAll('.main-content-area > div').forEach(section => {
-        // Exclude messageBox, overlay, navigationBar from being hidden by default
-        if (section.id !== 'messageBox' && section.id !== 'overlay' && section.id !== 'navigationBar') {
-             section.classList.add('hidden');
-        }
-    });
+    // 2. Load data from IndexedDB on startup (if any)
+    await loadDataFromIndexedDB();
 
-    // Elements for general plotting sections (common to branches, employees, time-series, complex_stats, and home after upload)
-    const commonPlottingElements = [
-        document.getElementById('plottingControlsSection'),
-        myChartCanvas,
-        mostRecentGraphSection,
-        savedGraphsSection,
-        plotGraphBtn,
-        saveGraphBtn,
-        exportGraphBtn,
-        getInsightsBtn,
-        insightsOutput
-    ];
-
-    // Immediately show universally expected elements if they exist
-    // Navigation bar is handled in HTML directly. messageBox and overlay handled by ui-components.
-    // We assume the main-content-area container itself is always visible.
-
-    switch (currentPage) {
-        case 'home.html':
-            // Home page specific UI setup will be handled by home.js
-            // This ensures home.js controls its unique elements like file input, data tables.
-            // main.js will still trigger loadDataFromIndexedDB via initializeUIForCurrentPage on all pages.
-            // The `if (loaded && loaded.parsedData.length > 0)` block below will then populate universals.
-            break;
-        case 'branches.html':
-        case 'employees.html':
-        case 'time-series.html':
-        case 'complex_stats.html':
-            // For these analysis pages, common plotting/insights sections are generally visible
-            commonPlottingElements.forEach(el => el && el.classList.remove('hidden'));
-            break;
-        default:
-            console.warn("Unknown page:", currentPage);
-            break;
+    // If data is present, enable relevant UI elements
+    if (parsedData.length > 0) {
+        // This part is largely handled by home.js's initializeHomePage,
+        // which now checks for loaded data and enables its buttons.
+        // We keep the populateAxisSelects here for redundancy if charting section is shown directly.
+        populateAxisSelects(parsedData, headers);
     }
 
-    await openDatabase(); // Ensure IndexedDB is open
-    const loadedData = await loadDataFromIndexedDB(); // This updates the `parsedData` and `headers` exports in data-handlers.js
+    // 3. Load active plot configuration (if any)
+    const activePlotConfig = await loadActivePlotConfig();
+    if (activePlotConfig && parsedData.length > 0) {
+        // Automatically draw the last active plot if data is available
+        drawChart(activePlotConfig.chartConfig, parsedData, activePlotConfig.chartConfig.chartType);
+        // Show plotting and save buttons if a chart was active
+        if (chartingSection) chartingSection.classList.remove('hidden');
+        if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
+        if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
+    }
 
-    if (loadedData && parsedData.length > 0) { // Check the imported `parsedData` from data-handlers
-        console.log("[Main] Global data loaded from IndexedDB. Data points:", parsedData.length, "Headers:", headers.length);
-        // fileNameDisplay is now handled in home.js when on home page
-        populateAxisSelects(headers, parsedData); // Use imported headers and parsedData
+    // 4. Load and render saved charts
+    const savedCharts = await loadSavedCharts();
+    if (savedCharts.length > 0) {
+        // Render the table of saved charts
         renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
-
-        const currentPageId = window.location.pathname.split('/').pop();
-        const activePlot = await loadActivePlotConfig(currentPageId);
-        if (activePlot) {
-            console.log(`[IndexedDB] Loaded active plot config for ${currentPageId}:`, activePlot);
-            if (xAxisSelect) xAxisSelect.value = activePlot.xAxisColumn;
-            if (yAxisSelect) yAxisSelect.value = activePlot.yAxisColumn;
-            if (chartTypeSelect) chartTypeSelect.value = activePlot.chartType;
-            if (yAxisAggregationSelect) yAxisAggregationSelect.value = activePlot.yAxisAggregation;
-
-            // Restore page-specific filter inputs
-            if (activePlot.xAxisFilterValue && xAxisFilterInput) {
-                xAxisFilterInput.value = activePlot.xAxisFilterValue;
-            }
-            if (activePlot.startDate && startDateInput) {
-                startDateInput.value = activePlot.startDate;
-            }
-            if (activePlot.endDate && endDateInput) {
-                endDateInput.value = activePlot.endDate;
-            }
-
-            drawChart(
-                myChartCanvas,
-                xAxisSelect,
-                yAxisSelect,
-                chartTypeSelect,
-                yAxisAggregationSelect,
-                xAxisFilterInput,
-                startDateInput,
-                endDateInput,
-                parsedData, // Use imported parsedData
-                headers,    // Use imported headers
-                showMessageBox,
-                saveGraphBtn,
-                exportGraphBtn,
-                recentGraphDescription,
-                recentSavedChartCanvas
-            );
-        } else {
-             // If no active plot config, draw an initial default chart or clear
-            drawChart(
-                myChartCanvas,
-                xAxisSelect,
-                yAxisSelect,
-                chartTypeSelect,
-                yAxisAggregationSelect,
-                xAxisFilterInput,
-                startDateInput,
-                endDateInput,
-                parsedData, // Use imported parsedData
-                headers,    // Use imported headers
-                showMessageBox,
-                saveGraphBtn,
-                exportGraphBtn,
-                recentGraphDescription,
-                recentSavedChartCanvas
-            );
+        // Show the saved graphs section
+        if (document.getElementById('savedGraphsSection')) {
+            document.getElementById('savedGraphsSection').classList.remove('hidden');
         }
-
+        // Load and display the most recent saved chart if it exists
+        const mostRecentChart = savedCharts.sort((a, b) => new Date(b.dateSaved) - new Date(a.dateSaved))[0];
+        if (mostRecentChart && mostRecentGraphSection && recentSavedChartCanvas) {
+            mostRecentGraphSection.classList.remove('hidden');
+            recentGraphDescription.textContent = `Description: ${mostRecentChart.description || 'N/A'} (Saved: ${new Date(mostRecentChart.dateSaved).toLocaleString()})`;
+            drawChart(mostRecentChart.chartConfig, parsedData, mostRecentChart.chartConfig.chartType, recentSavedChartCanvas);
+        }
     } else {
-        console.log("No data loaded from IndexedDB or data is empty. Resetting universal UI.");
-        resetUniversalUI(); // Call the reset for universal elements
-        // Page-specific resets (e.g., filename display on home.html) should be handled by their own scripts.
+        // Hide saved graphs section if no charts are saved
+        if (document.getElementById('savedGraphsSection')) {
+            document.getElementById('savedGraphsSection').classList.add('hidden');
+        }
     }
 }
 
+// --- Event Listeners (Universal / Main App) ---
 
-/**
- * Resets the universal UI components to their initial state when no CSV data is loaded.
- * This does not include page-specific elements like file input or data tables on home.html.
- */
-function resetUniversalUI() {
-    console.log("[Main] Resetting universal UI components.");
-    clearChartInstances(); // From charting.js
-
-    // Reset universal selects
-    if (xAxisSelect) xAxisSelect.innerHTML = '<option value="">Select X-Axis</option>';
-    if (yAxisSelect) yAxisSelect.innerHTML = '<option value="">Select Y-Axis</option>';
-    if (chartTypeSelect) chartTypeSelect.value = 'bar';
-    if (yAxisAggregationSelect) yAxisAggregationSelect.value = 'average';
-
-    // Hide universal charting/insights sections that become active with data
-    if (myChartCanvas) {
-        const ctx = myChartCanvas.getContext('2d');
-        ctx.clearRect(0, 0, myChartCanvas.width, myChartCanvas.height);
-    }
-    if (mostRecentGraphSection) mostRecentGraphSection.classList.add('hidden');
-    if (recentGraphDescription) recentGraphDescription.textContent = '';
-    if (saveGraphBtn) saveGraphBtn.classList.add('hidden');
-    if (exportGraphBtn) exportGraphBtn.classList.add('hidden');
-
-    // Hide and clear saved graph view
-    if (viewedSavedChartInstance) {
-        viewedSavedChartInstance.destroy();
-        viewedSavedChartInstance = null;
-    }
-    if (viewedSavedGraphSection) {
-        viewedSavedGraphSection.classList.add('hidden');
-        if (viewedGraphDescription) viewedGraphDescription.textContent = '';
-    }
-
-    // Clear insights output
-    if (insightsOutput) insightsOutput.classList.add('hidden');
-    if (insightsText) insightsText.textContent = '';
-    if (insightsLoading) insightsLoading.classList.add('hidden');
-
-    // Re-render saved charts table with empty data
-    if (savedGraphsTableBody) { // Check if element exists before passing
-         renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
-    }
-
-    // Clear universal page-specific inputs that might exist across multiple plotting pages
-    if (xAxisFilterInput) xAxisFilterInput.value = '';
-    if (startDateInput) startDateInput.value = '';
-    if (endDateInput) endDateInput.value = '';
-
-    console.log("[Main] Universal UI reset complete.");
-}
-
-
-// --- Global Event Listeners (Universal) ---
-
-// Listener for plotting a graph (available on any page with plotting controls)
+// Listener to plot a graph
 if (plotGraphBtn) {
-    plotGraphBtn.addEventListener('click', async () => {
-        if (!parsedData || parsedData.length === 0) { // Use imported parsedData
-            showMessageBox('No data loaded. Please upload a CSV file on the Home page first.');
+    plotGraphBtn.addEventListener('click', () => {
+        if (parsedData.length === 0) {
+            showMessageBox("Please upload a CSV file first.");
             return;
         }
 
-        if (!xAxisSelect.value || !yAxisSelect.value || !chartTypeSelect.value) {
-            showMessageBox('Please select X-Axis, Y-Axis, and Chart Type.');
+        const xAxisSelect = document.getElementById('xAxisSelect');
+        const yAxisSelect = document.getElementById('yAxisSelect');
+        const chartTypeSelect = document.getElementById('chartTypeSelect');
+        const yAxisAggregationSelect = document.getElementById('yAxisAggregationSelect');
+
+        const xAxisCol = xAxisSelect.value;
+        const yAxisCol = yAxisSelect.value;
+        const chartType = chartTypeSelect.value;
+        const yAxisAggregation = yAxisAggregationSelect.value;
+
+        if (!xAxisCol || !yAxisCol) {
+            showMessageBox("Please select both X and Y axis columns.");
             return;
         }
 
-        drawChart(
-            myChartCanvas,
-            xAxisSelect,
-            yAxisSelect,
-            chartTypeSelect,
-            yAxisAggregationSelect,
-            xAxisFilterInput, // May be null on some pages, handle gracefully in drawChart
-            startDateInput,   // May be null
-            endDateInput,     // May be null
-            parsedData, // Use imported parsedData
-            headers,    // Use imported headers
-            showMessageBox,
-            saveGraphBtn,
-            exportGraphBtn,
-            recentGraphDescription,
-            recentSavedChartCanvas
-        );
+        // Draw the chart and save its configuration as the active plot
+        drawChart({ xAxisCol, yAxisCol, chartType, yAxisAggregation }, parsedData, chartType);
+        saveActivePlotConfig({ xAxisCol, yAxisCol, chartType, yAxisAggregation });
 
-        // Save active plot configuration for the current page
-        const currentPageId = window.location.pathname.split('/').pop();
-        await saveActivePlotConfig(currentPageId, {
-            xAxisColumn: xAxisSelect.value,
-            yAxisColumn: yAxisSelect.value,
-            chartType: chartTypeSelect.value,
-            yAxisAggregation: yAxisAggregationSelect.value,
-            // Include page-specific filters if present
-            xAxisFilterValue: xAxisFilterInput ? xAxisFilterInput.value : undefined,
-            startDate: startDateInput ? startDateInput.value : undefined,
-            endDate: endDateInput ? endDateInput.value : undefined
-        });
-        console.log(`[IndexedDB] Active plot config saved for ${currentPageId}`);
+        // Show save and export buttons after a chart is plotted
+        if (saveGraphBtn) saveGraphBtn.classList.remove('hidden');
+        if (exportGraphBtn) exportGraphBtn.classList.remove('hidden');
     });
 }
 
-// Listener for Get Data Insights button (universal)
+// Listener for the "Get Data Insights" button
 if (getInsightsBtn) {
     getInsightsBtn.addEventListener('click', async () => {
-        if (!parsedData || parsedData.length === 0) { // Use imported parsedData
-            showMessageBox('No data loaded. Please upload a CSV file and load data before getting insights.');
+        if (parsedData.length === 0) {
+            showMessageBox("Please upload a CSV file first to get insights.");
             return;
         }
+
+        const insightsOutput = document.getElementById('insightsOutput');
+        const insightsText = document.getElementById('insightsText');
+        const insightsLoading = document.getElementById('insightsLoading');
 
         if (insightsOutput) insightsOutput.classList.remove('hidden');
         if (insightsText) insightsText.textContent = '';
         if (insightsLoading) insightsLoading.classList.remove('hidden');
 
-        // Placeholder for actual AI integration
-        const apiKey = "AIzaSyAjF5n8EStCsR8U3xiO2qnIkOLbsRhhONU"; // Your API key would go here
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+        try {
+            // Prepare a sample of the data for the LLM
+            const sampleSize = Math.min(parsedData.length, 50); // Use up to 50 rows for insights
+            const dataSample = parsedData.slice(0, sampleSize);
+            const headersString = headers.join(', ');
 
-        // In a real application, youd send `parsedData` and `headers` to a backend AI service
-        // For demonstration, let's simulate a delay and provide a dummy insight
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call delay
+            const prompt = `Given the following CSV data (headers: ${headersString}) and a sample of the first ${sampleSize} rows: ${JSON.stringify(dataSample)}. Provide a concise summary of the data, highlighting key trends, potential outliers, and interesting relationships between columns. Also, suggest 2-3 potential plots or analyses that could be done with this data, and briefly explain why.`;
 
-        let insightMessage = "Based on the loaded CSV data, initial observations can be made. This is a placeholder for detailed AI-driven insights that would analyze trends, anomalies, and correlations based on your dataset and the current plot configuration if available.";
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = "AIzaSyAjF5n8EStCsR8U3xiO2qnIkOLbsRhhONU"; // If you want to use models other than gemini-2.0-flash, provide an API key here. Otherwise, leave this as-is.
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-        if (myChartCanvas && myChartCanvas.chartInstance) {
-            insightMessage += `\\n\\nCurrent plot shows \"${myChartCanvas.chartInstance.options.plugins.title.text}\". A deeper analysis might reveal specific patterns related to \"${myChartCanvas.chartInstance.options.scales.x.title.text.text}\" and \"${myChartCanvas.chartInstance.options.scales.y.title.text.text}\".`;
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json(); // Await the JSON parsing
+
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                const text = result.candidates[0].content.parts[0].text;
+                if (insightsText) insightsText.textContent = text;
+            } else {
+                if (insightsText) insightsText.textContent = 'Could not retrieve insights. Please try again.';
+                console.error("Unexpected API response structure:", result);
+            }
+        } catch (error) {
+            console.error("Error fetching insights:", error);
+            if (insightsText) insightsText.textContent = `Error: ${error.message}`;
+            showMessageBox("Failed to get insights. Please check your network connection or try again.");
+        } finally {
+            if (insightsLoading) insightsLoading.classList.add('hidden');
         }
-
-        if (insightsText) insightsText.textContent = insightMessage;
-        if (insightsLoading) insightsLoading.classList.add('hidden');
     });
 }
 
-// Listener for Clear All Data Button (universal)
+
+// Listener to clear all data and saved plots
 if (clearAllDataBtn) {
-    clearAllDataBtn.addEventListener('click', () => {
-        showMessageBox(
-            'Are you sure you want to clear all loaded CSV data and active plot configurations from your browser storage?',
-            true, // isConfirm
-            async () => {
-                await clearCSVDataFromIndexedDB(); // This will also reset parsedData and headers in data-handlers.js
-                await clearAllSavedCharts();
-                // Clear active plot configs for all known pages
-                await clearActivePlotConfig('home.html');
-                await clearActivePlotConfig('branches.html');
-                await clearActivePlotConfig('employees.html');
-                await clearActivePlotConfig('time-series.html');
-                await clearActivePlotConfig('complex_stats.html');
+    clearAllDataBtn.addEventListener('click', async () => {
+        const confirmClear = await showPromptBox("Are you sure you want to clear ALL data and saved plots? This action cannot be undone.");
+        if (confirmClear) {
+            try {
+                await clearCSVDataFromIndexedDB(); // Clears CSV data and headers
+                await clearAllSavedCharts();       // Clears all saved charts
+                await clearActivePlotConfig();     // Clears active plot config
 
-                resetUniversalUI(); // Reset universal UI elements
-                // Page-specific UI elements should be reset by their own page JS (e.g., home.js's resetHomeUI)
-                // Trigger re-initialization of the current page to reflect the cleared state
-                initializeUIForCurrentPage();
-                showMessageBox('All data cleared successfully!', false);
-                console.log("[IndexedDB] All CSV data and active plots cleared.");
+                parsedData.splice(0, parsedData.length); // Clear global parsedData array
+                headers.splice(0, headers.length);       // Clear global headers array
+
+                clearChartInstances(); // Destroy all Chart.js instances
+
+                // Reset UI elements on the home page
+                if (document.getElementById('fileName')) {
+                    document.getElementById('fileName').textContent = 'No file selected. Please upload a CSV to begin your analysis.';
+                }
+                // Hide all sections that display data or charts
+                // These are now handled by home.js. We don't need to duplicate here.
+                // Re-initialize home page to reset its state
+                if (typeof initializeHomePage !== 'undefined') {
+                    // Call the function from home.js if it's available in scope
+                    initializeHomePage();
+                } else {
+                    // Fallback or a more direct reset if initializeHomePage isn't global
+                    location.reload(); // Simple reload to reset everything
+                }
+
+                showMessageBox("All data and saved plots have been cleared!");
+            } catch (error) {
+                console.error("Error clearing all data:", error);
+                showMessageBox(`Error clearing data: ${error.message}`);
             }
-        );
+        } else {
+            showMessageBox("Clear operation cancelled.");
+        }
     });
 }
 
-
-// Listener for Clear All Saved Graphs Button (universal)
+// Listener to clear only saved graphs (separate from all data)
 if (clearAllSavedGraphsBtn) {
-    clearAllSavedGraphsBtn.addEventListener('click', () => {
-        showMessageBox(
-            'Are you sure you want to clear all saved charts from your browser storage? This action cannot be undone.',
-            true, // isConfirm
-            async () => {
-                await clearAllSavedCharts();
-                renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById); // Re-render table with empty data
-                showMessageBox('All saved charts cleared successfully!', false);
-                console.log("[IndexedDB] All saved charts cleared.");
-                // Also hide the viewed saved graph section if it was showing a deleted chart
-                if (viewedSavedGraphSection) viewedSavedGraphSection.classList.add('hidden');
+    clearAllSavedGraphsBtn.addEventListener('click', async () => {
+        const confirmClear = await showPromptBox("Are you sure you want to clear ALL saved graphs? This action cannot be undone.");
+        if (confirmClear) {
+            try {
+                await clearAllSavedCharts(); // Clears only saved charts
+                // Re-render the saved charts table (which will now be empty)
+                renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
+                showMessageBox("All saved graphs have been cleared!");
+            } catch (error) {
+                console.error("Error clearing saved graphs:", error);
+                showMessageBox(`Error clearing saved graphs: ${error.message}`);
             }
-        );
+        } else {
+            showMessageBox("Clear saved graphs operation cancelled.");
+        }
     });
 }
 
 
-// Listener to save a graph (universal)
+// Listener to save a graph
 if (saveGraphBtn) {
     saveGraphBtn.addEventListener('click', async () => {
-        if (!myChartCanvas || !myChartCanvas.chartInstance) {
+        if (!myChartCanvas || !myChartCanvas.chartInstance || !myChartCanvas.chartConfig) {
             showMessageBox("No chart is currently plotted to save.");
             return;
         }
 
-        const chartConfig = myChartCanvas.chartInstance.config;
-        let description = prompt("Enter a brief description for this chart:");
+        let description = await showPromptBox("Enter a description for your chart (optional):");
         if (description === null) { // User clicked Cancel
             return;
         }
@@ -411,7 +271,7 @@ if (saveGraphBtn) {
         }
 
         const chartId = await saveSavedChart({
-            chartConfig: chartConfig,
+            chartConfig: myChartCanvas.chartConfig, // Use the stored config
             description: description,
             dateSaved: new Date().toISOString()
         });
@@ -441,6 +301,7 @@ if (exportGraphBtn) {
         showMessageBox('Chart exported as PNG!', false);
     });
 }
+
 
 // Ensure UI initializes on page load
 window.addEventListener('DOMContentLoaded', initializeUIForCurrentPage);

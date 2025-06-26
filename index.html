@@ -36,20 +36,25 @@
     <div class="main-container w-full max-w-4xl p-8 rounded-xl shadow-2xl main-content-area text-gray-900">
         <h1 class="text-4xl font-bold text-center mb-6 text-gray-800">CSV Data Analyzer</h1>
 
+        <!-- File Upload Section -->
+        <div class="flex flex-col items-center justify-center space-y-4 mb-8 p-6 rounded-lg shadow-inner content-section-background">
+            <h2 class="section-title mb-4">Upload CSV File</h2>
+            <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
+            <!-- The buttons 'showDataOverviewBtn' and 'showPlottingSectionBtn' have been moved from here -->
+        </div>
+
         <!-- CSV Data Status Section -->
         <div class="mb-8 p-6 rounded-lg shadow-inner content-section-background">
             <h3 class="text-xl font-semibold mb-3 section-title">CSV Data Status</h3>
             <p id="fileName" class="text-center text-gray-700">No file selected. Please upload a CSV to begin your analysis.</p>
         </div>
 
-        <!-- File Upload Section -->
-        <div class="flex flex-col items-center justify-center space-y-4 mb-8 p-6 rounded-lg shadow-inner content-section-background">
-            <h2 class="section-title mb-4">Upload CSV File</h2>
-            <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"/>
-            <button id="showDataOverviewBtn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 ease-in-out mt-4" disabled>
+        <!-- Action Buttons Section (New section for overview and plotting buttons) -->
+        <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4 mb-8 p-6 rounded-lg shadow-inner content-section-background">
+            <button id="showDataOverviewBtn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-300 ease-in-out" disabled>
                 Show Data Overview
             </button>
-            <button id="showPlottingSectionBtn" class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-300 ease-in-out mt-4" disabled>
+            <button id="showPlottingSectionBtn" class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-300 ease-in-out" disabled>
                 Plot Custom Graph
             </button>
         </div>

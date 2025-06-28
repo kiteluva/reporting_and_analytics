@@ -13,7 +13,7 @@ import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 // If your Vercel project has a custom domain or a more stable root '.vercel.app' domain,
 // it's generally better to use that instead of a deployment-specific URL like this one,
 // as deployment URLs can sometimes change or be less intuitive.
-const PROXY_SERVER_URL = 'https://vercel.com/kiteluvas-projects/reporting0and0analytics/C8sEPd5nYEdnL3iVAd6eU2aN7wZw'; 
+const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app/'; 
 
 
 // --- DOM Elements specific to complex_stats.html ---

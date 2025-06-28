@@ -263,7 +263,7 @@ async function getAIInterpretationForRegression() {
 
     const regressionSummary = regressionResultsText.textContent;
 
-    const apiKey = "AIzaSyAjF5n8EStCsR8U3xiO2qnIkOLbsRhhONU"; // Your API key
+    const apiKey = ""; // Your API key
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     try {

@@ -7,6 +7,14 @@ import { parsedData, headers } from './data-handlers.js'; // Import global data
 import { showMessageBox as showUIMessageBox } from './ui-components.js'; // Alias to avoid conflict if showMessageBox is also in charting.js
 import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 
+// --- IMPORTANT: Define your deployed backend proxy server URL here ---
+// This URL points to your Vercel-deployed backend proxy server.
+// It should be the same URL as defined in main.js.
+// If your Vercel project has a custom domain or a more stable root '.vercel.app' domain,
+// it's generally better to use that instead of a deployment-specific URL like this one,
+// as deployment URLs can sometimes change or be less intuitive.
+const PROXY_SERVER_URL = 'https://vercel.com/kiteluvas-projects/reporting0and0analytics/C8sEPd5nYEdnL3iVAd6eU2aN7wZw'; 
+
 
 // --- DOM Elements specific to complex_stats.html ---
 const calculateCorrelationBtn = document.getElementById('plotCorrelationBtn');
@@ -124,13 +132,13 @@ function displayCorrelationMatrix(data, columns, orderBy = 'alphabetical') {
             const avgAbsB = getAverageAbsCorrelation(b);
 
             if (orderBy === 'strongest-positive') {
-                 // Sort by how positively correlated they are, generally against a reference (e.g., first selected or just overall average)
-                 // This requires a more complex sorting strategy, as a column's "strongest positive" isn't intrinsic.
-                 // For now, let's just sort by strongest overall absolute correlation if not alphabetical,
-                 // and the user can interpret. True "strongest positive" would need a reference column.
-                 return avgAbsB - avgAbsA; // Placeholder: fallback to strongest absolute
+                // Sort by how positively correlated they are, generally against a reference (e.g., first selected or just overall average)
+                // This requires a more complex sorting strategy, as a column's "strongest positive" isn't intrinsic.
+                // For now, let's just sort by strongest overall absolute correlation if not alphabetical,
+                // and the user can interpret. True "strongest positive" would need a reference column.
+                return avgAbsB - avgAbsA; // Placeholder: fallback to strongest absolute
             } else if (orderBy === 'strongest-negative') {
-                 return avgAbsB - avgAbsA; // Placeholder: fallback to strongest absolute
+                return avgAbsB - avgAbsA; // Placeholder: fallback to strongest absolute
             } else if (orderBy === 'strongest-absolute') {
                 return avgAbsB - avgAbsA;
             }
@@ -174,7 +182,7 @@ function displayCorrelationMatrix(data, columns, orderBy = 'alphabetical') {
                 if (correlation < 0) { // Add a darker shade for negative correlations
                     cellClass += ' text-red-800'; // Darker text for negative
                 } else if (correlation > 0) {
-                     cellClass += ' text-green-800'; // Darker text for positive
+                    cellClass += ' text-green-800'; // Darker text for positive
                 }
             } else {
                 cellClass = 'bg-gray-100 text-gray-500';
@@ -263,44 +271,28 @@ async function getAIInterpretationForRegression() {
 
     const regressionSummary = regressionResultsText.textContent;
 
-    const apiKey = ""; // Your API key
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    // --- IMPORTANT: Call your deployed backend proxy server ---
+    // The URL provided is a specific deployment URL. If your Vercel project has a more stable
+    // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
+    const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { // <-- UPDATED LINE
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: regressionSummary }) // Send the regression summary to your proxy
+    });
 
-    try {
-        // Construct the prompt for the AI
-        const prompt = `Analyze the following (dummy) Multiple Linear Regression results and provide a brief interpretation. Focus on the meaning of the Adjusted R-squared and the dummy coefficients. Acknowledge that the data is synthetic.
+    const result = await response.json();
+    let aiInterpretation = "Failed to get AI interpretation."; // Default message
 
-        Regression Results:
-        ${regressionSummary}
+    if (result.candidates && result.candidates.length > 0 &&
+        result.candidates[0].content && result.candidates[0].content.parts &&
+        result.candidates[0].content.parts.length > 0) {
+        aiInterpretation = result.candidates[0].content.parts[0].text;
+    } else {
+        console.error("AI response structure unexpected:", result);
+        aiInterpretation = "Could not parse AI interpretation. Please try again or check console for errors.";
+    }
 
-        Provide insights on:
-        1. How well the independent variables explain the dependent variable (based on R-squared).
-        2. The (dummy) impact of independent variables on the dependent variable (positive/negative correlation implied by coefficient sign).
-        3. A disclaimer that these are dummy results and a real analysis needs actual calculations.`;
-
-        let chatHistory = [];
-        chatHistory.push({ role: "user", parts: [{ text: prompt }] });
-        const payload = { contents: chatHistory };
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-        let aiInterpretation = "Failed to get AI interpretation."; // Default message
-
-        if (result.candidates && result.candidates.length > 0 &&
-            result.candidates[0].content && result.candidates[0].content.parts &&
-            result.candidates[0].content.parts.length > 0) {
-            aiInterpretation = result.candidates[0].content.parts[0].text;
-        } else {
-            console.error("AI response structure unexpected:", result);
-            aiInterpretation = "Could not parse AI interpretation. Please try again or check console for errors.";
-        }
-
-        if (regressionInsightsText) regressionInsightsText.textContent = aiInterpretation;
+    if (regressionInsightsText) regressionInsightsText.textContent = aiInterpretation;
 
     } catch (error) {
         console.error('Error fetching AI interpretation:', error);
@@ -391,7 +383,7 @@ async function initializeComplexStatsPage() {
             const selectedCols = Array.from(correlationColumnsSelect.selectedOptions).map(option => option.value);
             displayCorrelationMatrix(parsedData, selectedCols, correlationOrderSelect ? correlationOrderSelect.value : 'alphabetical');
         } else {
-             if (correlationMatrixContainer) {
+            if (correlationMatrixContainer) {
                 correlationMatrixContainer.innerHTML = '<p class="text-gray-600 text-center">Select at least two numeric columns and click "Generate Correlation Matrix".</p>';
                 correlationMatrixContainer.classList.remove('hidden');
             }
@@ -464,8 +456,8 @@ async function initializeComplexStatsPage() {
             // Ensure dependent variable is not among independent variables
             const finalIndependentVars = independentVars.filter(col => col !== dependentVar);
             if (finalIndependentVars.length === 0 && independentVars.length > 0) {
-                 showUIMessageBox("Dependent variable cannot also be an independent variable. Please adjust your selection.");
-                 return;
+                showUIMessageBox("Dependent variable cannot also be an independent variable. Please adjust your selection.");
+                return;
             }
 
             performMultipleLinearRegression(parsedData, dependentVar, finalIndependentVars);

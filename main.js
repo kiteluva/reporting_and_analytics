@@ -28,11 +28,8 @@ import {
 import { showMessageBox, hideMessageBox, showPromptBox } from './ui-components.js';
 
 // --- IMPORTANT: Define your deployed backend proxy server URL here ---
-// This URL points to your Vercel-deployed backend proxy server.
-// If your Vercel project has a custom domain or a more stable root '.vercel.app' domain,
-// it's generally better to use that instead of a deployment-specific URL like this one,
-// as deployment URLs can sometimes change or be less intuitive.
-const PROXY_SERVER_URL = https:'https//reporting0and0analytics.vercel.app/'; 
+// Using the stable root domain provided by Vercel for your project.
+const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app'; 
 
 // --- DOM Elements (Universal / Main App) ---
 const plotGraphBtn = document.getElementById('plotGraphBtn');
@@ -188,8 +185,6 @@ if (getInsightsBtn) {
             const payload = { contents: chatHistory };
             
             // --- IMPORTANT: Call your deployed backend proxy server ---
-            // The URL provided is a specific deployment URL. If your Vercel project has a more stable
-            // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
             const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

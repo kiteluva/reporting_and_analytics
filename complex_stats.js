@@ -10,10 +10,8 @@ import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 // --- IMPORTANT: Define your deployed backend proxy server URL here ---
 // This URL points to your Vercel-deployed backend proxy server.
 // It should be the same URL as defined in main.js.
-// If your Vercel project has a custom domain or a more stable root '.vercel.app' domain,
-// it's generally better to use that instead of a deployment-specific URL like this one,
-// as deployment URLs can sometimes change or be less intuitive.
-const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app/'; 
+// Using the stable root domain provided by Vercel for your project.
+const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app'; 
 
 
 // --- DOM Elements specific to complex_stats.html ---

@@ -13,7 +13,7 @@ import {
     clearAllSavedCharts,
     deleteSavedChartById,
     parsedData, // Directly import parsedData from data-handlers.js
-    headers     // Directly import headers from data-handlers.js
+    headers      // Directly import headers from data-handlers.js
 } from './data-handlers.js';
 
 import {
@@ -26,6 +26,13 @@ import {
 } from './charting.js';
 
 import { showMessageBox, hideMessageBox, showPromptBox } from './ui-components.js';
+
+// --- IMPORTANT: Define your deployed backend proxy server URL here ---
+// This URL points to your Vercel-deployed backend proxy server.
+// If your Vercel project has a custom domain or a more stable root '.vercel.app' domain,
+// it's generally better to use that instead of a deployment-specific URL like this one,
+// as deployment URLs can sometimes change or be less intuitive.
+const PROXY_SERVER_URL = 'https://vercel.com/kiteluvas-projects/reporting0and0analytics/C8sEPd5nYEdnL3iVAd6eU2aN7wZw'; 
 
 // --- DOM Elements (Universal / Main App) ---
 const plotGraphBtn = document.getElementById('plotGraphBtn');
@@ -180,7 +187,10 @@ if (getInsightsBtn) {
             chatHistory.push({ role: "user", parts: [{ text: prompt }] });
             const payload = { contents: chatHistory };
             
-            const response = await fetch(apiUrl, {
+            // --- IMPORTANT: Call your deployed backend proxy server ---
+            // The URL provided is a specific deployment URL. If your Vercel project has a more stable
+            // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
+            const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -216,11 +226,11 @@ if (clearAllDataBtn) {
         if (confirmClear) {
             try {
                 await clearCSVDataFromIndexedDB(); // Clears CSV data and headers
-                await clearAllSavedCharts();       // Clears all saved charts
-                await clearActivePlotConfig('home-page-plot');     // Clears active plot config for this page
+                await clearAllSavedCharts();        // Clears all saved charts
+                await clearActivePlotConfig('home-page-plot');      // Clears active plot config for this page
 
                 parsedData.splice(0, parsedData.length); // Clear global parsedData array
-                headers.splice(0, headers.length);       // Clear global headers array
+                headers.splice(0, headers.length);        // Clear global headers array
 
                 clearChartInstances(); // Destroy all Chart.js instances
 
@@ -239,7 +249,7 @@ if (clearAllDataBtn) {
 
                 showMessageBox("All data and saved plots have been cleared!");
                 // Also re-render the saved charts table to reflect the cleared state
-                await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
+                await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById); // <-- Ensure this is awaited
             } catch (error) {
                 console.error("Error clearing all data:", error);
                 showMessageBox(`Error clearing data: ${error.message}`);

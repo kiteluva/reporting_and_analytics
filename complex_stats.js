@@ -11,15 +11,19 @@ import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 // This URL points to your Vercel-deployed backend proxy server.
 // It should be the same URL as defined in main.js.
 // Using the stable root domain provided by Vercel for your project.
-const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app'; 
+const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app';
 
 
 // --- DOM Elements specific to complex_stats.html ---
+const fileNameDisplay = document.getElementById('fileNameDisplay'); // Add this for consistent data status display
+const complexStatsControlsSection = document.getElementById('complexStatsControlsSection'); // Assuming a wrapper for all controls
+
 const calculateCorrelationBtn = document.getElementById('plotCorrelationBtn');
 const correlationColumnsSelect = document.getElementById('correlationColumnsSelect');
 const correlationMatrixOutput = document.getElementById('correlationMatrixOutput');
 const correlationMatrixContainer = document.getElementById('correlationMatrixContainer'); // Container for the table
 const correlationOrderSelect = document.getElementById('correlationOrderSelect'); // Added for sorting
+const correlationSection = document.getElementById('correlationSection'); // Wrapper for correlation features
 
 const calculateRegressionBtn = document.getElementById('runRegressionBtn');
 const yAxisSelectMLR = document.getElementById('yAxisSelectMLR');
@@ -30,6 +34,48 @@ const getRegressionInterpretationBtn = document.getElementById('getRegressionInt
 const regressionInsightsOutput = document.getElementById('regressionInsightsOutput');
 const regressionInsightsText = document.getElementById('regressionInsightsText');
 const regressionInsightsLoading = document.getElementById('regressionInsightsLoading');
+const regressionSection = document.getElementById('regressionSection'); // Wrapper for regression features
+
+
+/**
+ * Helper function to set the visibility and enabled state of complex stats controls.
+ * @param {boolean} enable - True to enable and show, false to disable and hide.
+ */
+function setComplexStatsControlsState(enable) {
+    // Main wrapper section
+    if (complexStatsControlsSection) {
+        if (enable) {
+            complexStatsControlsSection.classList.remove('hidden');
+        } else {
+            complexStatsControlsSection.classList.add('hidden');
+        }
+    }
+
+    // Individual controls and sections
+    const controls = [
+        calculateCorrelationBtn, correlationColumnsSelect, correlationOrderSelect,
+        calculateRegressionBtn, yAxisSelectMLR, xAxisSelectMLR, getRegressionInterpretationBtn
+    ];
+    controls.forEach(control => {
+        if (control) {
+            control.disabled = !enable;
+        }
+    });
+
+    // Sections that display results or are initially hidden
+    if (correlationSection) {
+        if (enable) correlationSection.classList.remove('hidden');
+        else correlationSection.classList.add('hidden');
+    }
+    if (regressionSection) {
+        if (enable) regressionSection.classList.remove('hidden');
+        else regressionSection.classList.add('hidden');
+    }
+    if (correlationMatrixContainer) correlationMatrixContainer.classList.add('hidden'); // Hide by default, shown after calculation
+    if (regressionResultsOutput) regressionResultsOutput.classList.add('hidden'); // Hide by default, shown after calculation
+    if (regressionInsightsOutput) regressionInsightsOutput.classList.add('hidden'); // Hide by default, shown after AI interpretation
+    if (regressionInsightsLoading) regressionInsightsLoading.classList.add('hidden'); // Always hidden initially
+}
 
 
 /**
@@ -215,6 +261,7 @@ function performMultipleLinearRegression(data, dependentVar, independentVars) {
 
     regressionResultsOutput.classList.remove('hidden');
     regressionResultsText.textContent = 'Calculating regression...';
+    if (getRegressionInterpretationBtn) getRegressionInterpretationBtn.classList.add('hidden'); // Hide button during calculation
 
     // Filter data for numeric values in selected columns
     const filteredData = data.filter(row => {
@@ -269,30 +316,30 @@ async function getAIInterpretationForRegression() {
 
     const regressionSummary = regressionResultsText.textContent;
 
-    // --- IMPORTANT: Call your deployed backend proxy server ---
-    // The URL provided is a specific deployment URL. If your Vercel project has a more stable
-    // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
-    const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { // <-- UPDATED LINE
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: regressionSummary }) // Send the regression summary to your proxy
-    });
+    try { // Moved try block to correctly enclose the fetch call
+        // --- IMPORTANT: Call your deployed backend proxy server ---
+        // The URL provided is a specific deployment URL. If your Vercel project has a more stable
+        // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
+        const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { // <-- UPDATED LINE
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: regressionSummary }) // Send the regression summary to your proxy
+        });
 
-    const result = await response.json();
-    let aiInterpretation = "Failed to get AI interpretation."; // Default message
+        const result = await response.json(); // Await the JSON parsing
+        let aiInterpretation = "Failed to get AI interpretation."; // Default message
 
-    if (result.candidates && result.candidates.length > 0 &&
-        result.candidates[0].content && result.candidates[0].content.parts &&
-        result.candidates[0].content.parts.length > 0) {
-        aiInterpretation = result.candidates[0].content.parts[0].text;
-    } else {
-        console.error("AI response structure unexpected:", result);
-        aiInterpretation = "Could not parse AI interpretation. Please try again or check console for errors.";
-    }
+        if (result.candidates && result.candidates.length > 0 &&
+            result.candidates[0].content && result.candidates[0].content.parts &&
+            result.candidates[0].content.parts.length > 0) {
+            aiInterpretation = result.candidates[0].content.parts[0].text;
+        } else {
+            console.error("AI response structure unexpected:", result);
+            aiInterpretation = "Could not parse AI interpretation. Please try again or check console for errors.";
+        }
+        if (regressionInsightsText) regressionInsightsText.textContent = aiInterpretation;
 
-    if (regressionInsightsText) regressionInsightsText.textContent = aiInterpretation;
-
-    } catch (error) {
+    } catch (error) { // Correctly placed catch block
         console.error('Error fetching AI interpretation:', error);
         if (regressionInsightsText) regressionInsightsText.textContent = 'Error fetching AI interpretation. Please check your network connection or API key.';
     } finally {
@@ -311,68 +358,86 @@ async function initializeComplexStatsPage() {
     // Await the dataReadyPromise to ensure parsedData and headers are loaded
     await dataReadyPromise;
 
-    const fileNameDisplay = document.getElementById('fileName'); // Ensure this element is retrieved if needed
-
     // Check if data is loaded. `parsedData` and `headers` are globally imported from data-handlers.js.
     if (parsedData.length > 0 && headers.length > 0) {
-        // Update file name display (if it's not set by main.js)
-        const savedFileName = localStorage.getItem('csvPlotterFileName');
-        if (fileNameDisplay && savedFileName) {
-            fileNameDisplay.textContent = `Selected file: ${savedFileName} (Data loaded from storage)`;
-        } else if (fileNameDisplay) {
-            fileNameDisplay.textContent = `Data loaded: ${parsedData.length} rows, ${headers.length} columns`;
+        // Update file name display
+        if (fileNameDisplay) {
+            const loadedFileName = localStorage.getItem('csvPlotterFileName') || 'Unnamed File';
+            fileNameDisplay.textContent = `Data loaded: ${loadedFileName} (${parsedData.length} rows)`;
+            fileNameDisplay.classList.remove('text-red-500');
+            fileNameDisplay.classList.add('text-green-700');
         }
 
-        // Ensure correlation and regression sections are visible if data is loaded
-        const correlationSection = document.getElementById('correlationSection');
-        const regressionSection = document.getElementById('regressionSection');
-        if (correlationSection) correlationSection.classList.remove('hidden');
-        if (regressionSection) regressionSection.classList.remove('hidden');
+        setComplexStatsControlsState(true); // Enable and show relevant controls/sections
 
         const numericHeaders = headers.filter(header => parsedData.some(row => typeof row[header] === 'number' && !isNaN(row[header])));
 
         // Populate Correlation Columns Select
         if (correlationColumnsSelect) {
             correlationColumnsSelect.innerHTML = ''; // Clear existing options
-            numericHeaders.forEach(header => {
+            if (numericHeaders.length === 0) {
                 const option = document.createElement('option');
-                option.value = header;
-                option.textContent = header;
+                option.value = "";
+                option.textContent = "No numerical columns available";
+                option.disabled = true;
                 correlationColumnsSelect.appendChild(option);
-            });
-            // Select all numeric columns by default for correlation
-            Array.from(correlationColumnsSelect.options).forEach(option => {
-                option.selected = true;
-            });
+            } else {
+                numericHeaders.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    correlationColumnsSelect.appendChild(option);
+                });
+                // Select all numeric columns by default for correlation
+                Array.from(correlationColumnsSelect.options).forEach(option => {
+                    option.selected = true;
+                });
+            }
         }
 
         // Populate MLR selects
         if (yAxisSelectMLR) {
             yAxisSelectMLR.innerHTML = '<option value="">Select Dependent Variable (Y)</option>';
-            numericHeaders.forEach(header => {
+            if (numericHeaders.length === 0) {
                 const option = document.createElement('option');
-                option.value = header;
-                option.textContent = header;
+                option.value = "";
+                option.textContent = "No numerical columns available";
+                option.disabled = true;
                 yAxisSelectMLR.appendChild(option);
-            });
-            if (numericHeaders.length > 0) yAxisSelectMLR.value = numericHeaders[0]; // Pre-select first numeric
+            } else {
+                numericHeaders.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    yAxisSelectMLR.appendChild(option);
+                });
+                if (numericHeaders.length > 0) yAxisSelectMLR.value = numericHeaders[0]; // Pre-select first numeric
+            }
         }
         if (xAxisSelectMLR) {
             xAxisSelectMLR.innerHTML = ''; // Clear existing options
-            numericHeaders.forEach(header => {
+            if (numericHeaders.length === 0) {
                 const option = document.createElement('option');
-                option.value = header;
-                option.textContent = header;
+                option.value = "";
+                option.textContent = "No numerical columns available";
+                option.disabled = true;
                 xAxisSelectMLR.appendChild(option);
-            });
-            // Auto-select all but the default dependent variable
-            if (yAxisSelectMLR && numericHeaders.length > 1) {
-                const defaultY = yAxisSelectMLR.value;
-                Array.from(xAxisSelectMLR.options).forEach(option => {
-                    if (option.value !== "" && option.value !== defaultY) {
-                        option.selected = true;
-                    }
+            } else {
+                numericHeaders.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    xAxisSelectMLR.appendChild(option);
                 });
+                // Auto-select all but the default dependent variable
+                if (yAxisSelectMLR && numericHeaders.length > 1) {
+                    const defaultY = yAxisSelectMLR.value;
+                    Array.from(xAxisSelectMLR.options).forEach(option => {
+                        if (option.value !== "" && option.value !== defaultY) {
+                            option.selected = true;
+                        }
+                    });
+                }
             }
         }
 
@@ -409,74 +474,88 @@ async function initializeComplexStatsPage() {
 
     } else {
         // This block will execute if no data is loaded at all
+        if (fileNameDisplay) {
+            fileNameDisplay.textContent = 'No file selected. Please upload a CSV on the Home page.';
+            fileNameDisplay.classList.remove('text-green-700');
+            fileNameDisplay.classList.add('text-red-500');
+        }
         showUIMessageBox("No data loaded. Please upload a CSV file on the Home page first to perform complex analysis.");
-        // Ensure all operation-specific sections are hidden if no data
-        const correlationSection = document.getElementById('correlationSection');
-        const regressionSection = document.getElementById('regressionSection');
-        if (correlationSection) correlationSection.classList.add('hidden');
-        if (regressionSection) regressionSection.classList.add('hidden');
-        if (correlationMatrixContainer) correlationMatrixContainer.classList.add('hidden');
-        if (regressionResultsOutput) regressionResultsOutput.classList.add('hidden');
-        if (getRegressionInterpretationBtn) getRegressionInterpretationBtn.classList.add('hidden');
-        if (regressionInsightsOutput) regressionInsightsOutput.classList.add('hidden');
-
-        // Reset file name display as well
-        if (fileNameDisplay) fileNameDisplay.textContent = 'No file selected. Please upload a CSV on the Home page.';
+        setComplexStatsControlsState(false); // Disable and hide all controls/sections
     }
 
     // --- Complex Stats-specific Event Listeners ---
     if (calculateCorrelationBtn) {
-        calculateCorrelationBtn.addEventListener('click', () => {
-            if (parsedData.length === 0) {
-                showUIMessageBox("No data loaded. Please upload a CSV file first.");
-                return;
-            }
-            const selectedColumns = Array.from(correlationColumnsSelect.selectedOptions).map(option => option.value);
-            const orderBy = correlationOrderSelect ? correlationOrderSelect.value : 'alphabetical';
-            displayCorrelationMatrix(parsedData, selectedColumns, orderBy);
-        });
+        calculateCorrelationBtn.removeEventListener('click', handleCalculateCorrelation); // Prevent duplicate listeners
+        calculateCorrelationBtn.addEventListener('click', handleCalculateCorrelation);
     }
 
     if (calculateRegressionBtn) {
-        calculateRegressionBtn.addEventListener('click', () => {
-            if (parsedData.length === 0) {
-                showUIMessageBox("No data loaded. Please upload a CSV file first.");
-                return;
-            }
-            const dependentVar = yAxisSelectMLR.value;
-            const independentVars = Array.from(xAxisSelectMLR.selectedOptions).map(option => option.value);
-
-            if (!dependentVar || independentVars.length === 0) {
-                showUIMessageBox("Please select at least one dependent and one independent variable for regression.");
-                return;
-            }
-
-            // Ensure dependent variable is not among independent variables
-            const finalIndependentVars = independentVars.filter(col => col !== dependentVar);
-            if (finalIndependentVars.length === 0 && independentVars.length > 0) {
-                showUIMessageBox("Dependent variable cannot also be an independent variable. Please adjust your selection.");
-                return;
-            }
-
-            performMultipleLinearRegression(parsedData, dependentVar, finalIndependentVars);
-        });
+        calculateRegressionBtn.removeEventListener('click', handleCalculateRegression); // Prevent duplicate listeners
+        calculateRegressionBtn.addEventListener('click', handleCalculateRegression);
     }
 
     if (getRegressionInterpretationBtn) {
+        getRegressionInterpretationBtn.removeEventListener('click', getAIInterpretationForRegression); // Prevent duplicate listeners
         getRegressionInterpretationBtn.addEventListener('click', getAIInterpretationForRegression);
     }
 
     // Add listener for correlation order change to re-render
     if (correlationOrderSelect) {
-        correlationOrderSelect.addEventListener('change', () => {
-            if (parsedData.length > 0 && correlationColumnsSelect && Array.from(correlationColumnsSelect.selectedOptions).length >= 2) {
-                const selectedColumns = Array.from(correlationColumnsSelect.selectedOptions).map(option => option.value);
-                const orderBy = correlationOrderSelect.value;
-                displayCorrelationMatrix(parsedData, selectedColumns, orderBy);
-            }
-        });
+        correlationOrderSelect.removeEventListener('change', handleCorrelationOrderChange); // Prevent duplicate listeners
+        correlationOrderSelect.addEventListener('change', handleCorrelationOrderChange);
     }
 }
+
+/**
+ * Event handler for Calculate Correlation button.
+ */
+function handleCalculateCorrelation() {
+    if (parsedData.length === 0) {
+        showUIMessageBox("No data loaded. Please upload a CSV file first.");
+        return;
+    }
+    const selectedColumns = Array.from(correlationColumnsSelect.selectedOptions).map(option => option.value);
+    const orderBy = correlationOrderSelect ? correlationOrderSelect.value : 'alphabetical';
+    displayCorrelationMatrix(parsedData, selectedColumns, orderBy);
+}
+
+/**
+ * Event handler for Run Regression button.
+ */
+function handleCalculateRegression() {
+    if (parsedData.length === 0) {
+        showUIMessageBox("No data loaded. Please upload a CSV file first.");
+        return;
+    }
+    const dependentVar = yAxisSelectMLR.value;
+    const independentVars = Array.from(xAxisSelectMLR.selectedOptions).map(option => option.value);
+
+    if (!dependentVar || independentVars.length === 0) {
+        showUIMessageBox("Please select at least one dependent and one independent variable for regression.");
+        return;
+    }
+
+    // Ensure dependent variable is not among independent variables
+    const finalIndependentVars = independentVars.filter(col => col !== dependentVar);
+    if (finalIndependentVars.length === 0 && independentVars.length > 0) {
+        showUIMessageBox("Dependent variable cannot also be an independent variable. Please adjust your selection.");
+        return;
+    }
+
+    performMultipleLinearRegression(parsedData, dependentVar, finalIndependentVars);
+}
+
+/**
+ * Event handler for Correlation Order Select change.
+ */
+function handleCorrelationOrderChange() {
+    if (parsedData.length > 0 && correlationColumnsSelect && Array.from(correlationColumnsSelect.selectedOptions).length >= 2) {
+        const selectedColumns = Array.from(correlationColumnsSelect.selectedOptions).map(option => option.value);
+        const orderBy = correlationOrderSelect.value;
+        displayCorrelationMatrix(parsedData, selectedColumns, orderBy);
+    }
+}
+
 
 // Attach the initialization function to the DOMContentLoaded event
 // This will run after main.js's DOMContentLoaded, ensuring parsedData/headers are available.

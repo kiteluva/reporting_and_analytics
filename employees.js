@@ -31,8 +31,7 @@ const savedGraphsSection = document.getElementById('savedGraphsSection');
 const savedGraphsTableBody = document.getElementById('savedGraphsTableBody');
 const clearAllSavedGraphsBtn = document.getElementById('clearAllSavedGraphsBtn');
 const viewedSavedGraphSection = document.getElementById('viewedSavedGraphSection');
-const viewedGraphDescription = document.getElementById('viewedGraphDescription');
-const viewedSavedChartCanvas = document.getElementById('viewedSavedChartCanvas');
+const viewedGraphDescription = document.getElementById('viewedSavedChartCanvas');
 
 
 /**
@@ -73,14 +72,10 @@ function setPlottingControlsState(enable) {
 
     // Manage visibility of saved charts sections based on data presence and whether any charts are saved
     if (savedGraphsSection) {
-        if (enable && (savedGraphsTableBody && savedGraphsTableBody.rows.length > 0)) { // Check if there are actual rows
-            savedGraphsSection.classList.remove('hidden');
-        } else {
-            savedGraphsSection.classList.add('hidden');
-        }
+        savedGraphsSection.classList.add('hidden'); // Initially hide, will be shown if charts are loaded
     }
     if (mostRecentGraphSection) {
-        mostRecentGraphSection.classList.add('hidden'); // Keep hidden unless explicitly shown by chart loading
+        mostRecentGraphSection.classList.add('hidden');
     }
     if (viewedSavedGraphSection) {
         viewedSavedGraphSection.classList.add('hidden');
@@ -185,12 +180,15 @@ async function initializeEmployeesPage() {
         // Also clear any existing chart instances specific to this page
         if (myChartCanvas && myChartCanvas.chartInstance) {
             myChartCanvas.chartInstance.destroy();
+            myChartCanvas.chartInstance = null;
         }
         if (recentSavedChartCanvas && recentSavedChartCanvas.chartInstance) {
             recentSavedChartCanvas.chartInstance.destroy();
+            recentSavedChartCanvas.chartInstance = null;
         }
         if (viewedSavedChartCanvas && viewedSavedChartCanvas.chartInstance) {
             viewedSavedChartCanvas.chartInstance.destroy();
+            viewedSavedChartCanvas.chartInstance = null;
         }
     }
 }
@@ -233,7 +231,7 @@ function handlePlotGraph() {
         return;
     }
 
-    const currentChartConfig = { xAxisCol, yAxisCol, chartType, yAxisAggregation };
+    const currentChartConfig = { xAxisCol, yAxisCol, chartType, yAxisAggregation, page: 'employees' }; // Added page tag
     drawChart(currentChartConfig, filteredData, chartType, myChartCanvas);
 }
 
@@ -256,7 +254,7 @@ async function handleSaveGraph() {
 
     try {
         const chartId = await saveSavedChart({
-            chartConfig: myChartCanvas.chartConfig,
+            chartConfig: { ...myChartCanvas.chartConfig, page: 'employees' }, // Ensure page tag is saved
             description: description,
             dateSaved: new Date().toISOString()
         });
@@ -301,13 +299,17 @@ async function handleClearAllSavedGraphs() {
     if (confirmClear) {
         try {
             const savedCharts = await loadSavedCharts();
-            const pageSpecificCharts = savedCharts.filter(chart => chart.chartConfig && chart.chartConfig.page === 'employees'); // Assuming you can tag charts by page
+            // Filter for charts specifically tagged for 'employees' page
+            const pageSpecificCharts = savedCharts.filter(chart => chart.chartConfig && chart.chartConfig.page === 'employees');
             for (const chart of pageSpecificCharts) {
                 await deleteSavedChartById(chart.id);
             }
             // Re-render the saved charts table (which will now be empty)
             await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
-            savedGraphsSection.classList.add('hidden'); // Hide if no charts left
+            const remainingCharts = await loadSavedCharts(); // Check if any charts remain (from other pages)
+            if (remainingCharts.length === 0) {
+                savedGraphsSection.classList.add('hidden'); // Hide if no charts left at all
+            }
             showMessageBox("All saved graphs on this page have been cleared!");
         } catch (error) {
             console.error("Error clearing saved graphs:", error);

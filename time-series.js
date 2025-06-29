@@ -73,16 +73,11 @@ function setPlottingControlsState(enable) {
     }
 
     // Manage visibility of saved charts sections based on data presence and whether any charts are saved
+    // This part will be updated after renderSavedChartsTable call to be more accurate based on actual saved charts
     if (savedGraphsSection) {
-        if (enable && (savedGraphsTableBody && savedGraphsTableBody.rows.length > 0)) { // Check if there are actual rows
-            savedGraphsSection.classList.remove('hidden');
-        } else {
-            savedGraphsSection.classList.add('hidden');
-        }
+        savedGraphsSection.classList.add('hidden'); // Initially hide, will be shown if charts are loaded
     }
     if (mostRecentGraphSection) {
-        // This section will be managed by loadSavedChart logic if a chart is loaded
-        // For now, keep it hidden unless explicitly shown by chart loading
         mostRecentGraphSection.classList.add('hidden');
     }
     if (viewedSavedGraphSection) {
@@ -212,12 +207,15 @@ async function initializeTimeSeriesPage() {
         // Also clear any existing chart instances specific to this page
         if (myChartCanvas && myChartCanvas.chartInstance) { // Access myChartCanvas.chartInstance if it's set up
             myChartCanvas.chartInstance.destroy();
+            myChartCanvas.chartInstance = null;
         }
         if (recentSavedChartCanvas && recentSavedChartCanvas.chartInstance) {
             recentSavedChartCanvas.chartInstance.destroy();
+            recentSavedChartCanvas.chartInstance = null;
         }
         if (viewedSavedChartCanvas && viewedSavedChartCanvas.chartInstance) {
             viewedSavedChartCanvas.chartInstance.destroy();
+            viewedSavedChartCanvas.chartInstance = null;
         }
     }
 }
@@ -275,7 +273,7 @@ function handlePlotGraph() {
         return;
     }
 
-    const currentChartConfig = { xAxisCol, yAxisCol, chartType, yAxisAggregation };
+    const currentChartConfig = { xAxisCol, yAxisCol, chartType, yAxisAggregation, page: 'time-series' }; // Added page tag
     drawChart(currentChartConfig, filteredData, chartType, myChartCanvas);
 }
 
@@ -298,7 +296,7 @@ async function handleSaveGraph() {
 
     try {
         const chartId = await saveSavedChart({
-            chartConfig: myChartCanvas.chartConfig,
+            chartConfig: { ...myChartCanvas.chartConfig, page: 'time-series' }, // Ensure page tag is saved
             description: description,
             dateSaved: new Date().toISOString()
         });
@@ -343,17 +341,18 @@ async function handleClearAllSavedGraphs() {
     if (confirmClear) {
         try {
             const savedCharts = await loadSavedCharts();
-            const pageSpecificCharts = savedCharts.filter(chart => chart.chartConfig && chart.chartConfig.page === 'time-series'); // Assuming you can tag charts by page
+            // Filter for charts specifically tagged for 'time-series' page
+            const pageSpecificCharts = savedCharts.filter(chart => chart.chartConfig && chart.chartConfig.page === 'time-series');
             for (const chart of pageSpecificCharts) {
                 await deleteSavedChartById(chart.id);
             }
-            // If no page specific tag, you might need to clear all or add a page identifier to saved chart config.
-            // For now, let's assume we clear all or you refine the deletion later.
-            // Simplified: await clearAllSavedCharts(); // This would clear ALL charts, not just page specific
 
             // Re-render the saved charts table (which will now be empty)
             await renderSavedChartsTable(savedGraphsTableBody, loadSavedChart, deleteSavedChartById);
-            savedGraphsSection.classList.add('hidden'); // Hide if no charts left
+            const remainingCharts = await loadSavedCharts(); // Check if any charts remain (from other pages)
+            if (remainingCharts.length === 0) {
+                savedGraphsSection.classList.add('hidden'); // Hide if no charts left at all
+            }
             showMessageBox("All saved graphs on this page have been cleared!");
         } catch (error) {
             console.error("Error clearing saved graphs:", error);

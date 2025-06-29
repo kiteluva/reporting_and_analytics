@@ -423,40 +423,24 @@ async function initializeHomePage() {
 
     // Attach file input listener
     if (csvFileInput) {
+        csvFileInput.removeEventListener('change', handleCSVFileUpload); // Prevent duplicate listeners
         csvFileInput.addEventListener('change', handleCSVFileUpload);
     }
 
     // Attach button listeners for showing/hiding sections
     if (showDataOverviewBtn) {
-        showDataOverviewBtn.addEventListener('click', () => {
-            hideAllAnalyticalSections(); // Hide all first
-            updateAndShowDataOverview(); // Then show/update data overview
-        });
+        showDataOverviewBtn.removeEventListener('click', handleShowDataOverview);
+        showDataOverviewBtn.addEventListener('click', handleShowDataOverview);
     }
 
     if (showPlottingSectionBtn) {
-        showPlottingSectionBtn.addEventListener('click', () => {
-            if (parsedData.length > 0) {
-                hideAllAnalyticalSections();
-                // Show plotting sections
-                if (chartingSection) chartingSection.classList.remove('hidden');
-                if (mostRecentGraphSection) mostRecentGraphSection.classList.remove('hidden');
-                if (savedGraphsSection) savedGraphsSection.classList.remove('hidden');
-
-                // Re-populate axis selects and attempt to draw active plot if any
-                populateAxisSelects(parsedData, headers); // This function is from charting.js
-                // The main.js file handles loading the active plot configuration
-                // after the UI is initialized and data is ready.
-            } else {
-                showMessageBox('No data loaded. Please upload a CSV file first.');
-            }
-        });
+        showPlottingSectionBtn.removeEventListener('click', handleShowPlottingSection);
+        showPlottingSectionBtn.addEventListener('click', handleShowPlottingSection);
     }
 
     if (distributionColumnSelect) {
-        distributionColumnSelect.addEventListener('change', (event) => {
-            drawColumnDistributionChart(parsedData, event.target.value);
-        });
+        distributionColumnSelect.removeEventListener('change', handleDistributionColumnChange);
+        distributionColumnSelect.addEventListener('change', handleDistributionColumnChange);
     }
 
     // Initial state: hide all analytical sections
@@ -465,15 +449,66 @@ async function initializeHomePage() {
     // After dataReadyPromise resolves, check if data is loaded and enable buttons
     if (parsedData.length > 0) {
         fileNameDisplay.textContent = `File loaded (from IndexedDB): ${localStorage.getItem('csvPlotterFileName') || 'Unnamed File'}`;
+        fileNameDisplay.classList.remove('text-red-500');
+        fileNameDisplay.classList.add('text-green-700');
         showDataOverviewBtn.disabled = false;
         showPlottingSectionBtn.disabled = false;
         updateAndShowDataOverview(); // Automatically show data overview if data is present on load
     } else {
         fileNameDisplay.textContent = 'No file selected. Please upload a CSV to begin your analysis.';
+        fileNameDisplay.classList.remove('text-green-700');
+        fileNameDisplay.classList.add('text-red-500');
         showDataOverviewBtn.disabled = true;
         showPlottingSectionBtn.disabled = true;
     }
 }
+
+/**
+ * Event handler for showing data overview.
+ */
+function handleShowDataOverview() {
+    hideAllAnalyticalSections(); // Hide all first
+    updateAndShowDataOverview(); // Then show/update data overview
+}
+
+/**
+ * Event handler for showing plotting section.
+ */
+async function handleShowPlottingSection() {
+    if (parsedData.length > 0) {
+        hideAllAnalyticalSections();
+        // Show plotting sections
+        if (chartingSection) chartingSection.classList.remove('hidden');
+        if (mostRecentGraphSection) mostRecentGraphSection.classList.remove('hidden');
+        if (savedGraphsSection) savedGraphsSection.classList.remove('hidden');
+
+        // Re-populate axis selects and attempt to draw active plot if any
+        populateAxisSelects(parsedData, headers); // This function is from charting.js
+
+        // Load and display the most recent saved chart if it exists
+        const savedCharts = await loadSavedCharts();
+        if (savedCharts.length > 0) {
+            const mostRecentChart = savedCharts.sort((a, b) => new Date(b.dateSaved) - new Date(a.dateSaved))[0];
+            if (mostRecentChart && mostRecentGraphSection && recentSavedChartCanvas) {
+                mostRecentGraphSection.classList.remove('hidden');
+                recentGraphDescription.textContent = `Description: ${mostRecentChart.description || 'N/A'} (Saved: ${new Date(mostRecentChart.dateSaved).toLocaleString()})`;
+                drawChart(mostRecentChart.chartConfig.chartConfig, parsedData, mostRecentChart.chartConfig.chartType, recentSavedChartCanvas);
+            }
+        }
+        // The main.js file handles loading the active plot configuration
+        // after the UI is initialized and data is ready.
+    } else {
+        showMessageBox('No data loaded. Please upload a CSV file first.');
+    }
+}
+
+/**
+ * Event handler for distribution column select change.
+ */
+function handleDistributionColumnChange(event) {
+    drawColumnDistributionChart(parsedData, event.target.value);
+}
+
 
 // Attach the initialization function to the DOMContentLoaded event
 // This will run after the DOM is fully loaded.

@@ -51,7 +51,7 @@
             <p id="fileNameDisplay" class="text-center text-gray-700">No file selected. Please upload a CSV on the Home page.</p>
         </div>
 
-        <!-- Chart Plotting Section - Renamed ID and now hidden by default -->
+        <!-- Chart Plotting Section -->
         <div id="plottingControlsSection" class="mb-8 p-6 rounded-lg shadow-inner content-section-background hidden">
             <h2 class="section-title mb-4">Plot Employee Data</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -94,7 +94,7 @@
                     </select>
                 </div>
                 <div class="col-span-1 md:col-span-2 lg:col-span-4">
-                    <label for="xAxisFilterInput" class="block text-sm font-medium text-gray-700">Filter X-Axis Values (e.g., "EMP001, EMP005")</label>
+                    <label for="xAxisFilterInput" class="block text-sm font-medium text-gray-700">Filter X-Axis Values (e.g., "Employee A, Employee B")</label>
                     <input type="text" id="xAxisFilterInput" placeholder="Enter comma-separated values to filter by" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
                 </div>
             </div>
@@ -111,6 +111,105 @@
             </div>
             <div class="relative w-full h-96 mt-6">
                 <canvas id="myChartCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Reports Division (New Section for Employees) -->
+        <div id="reportsDivision" class="mb-8 p-6 rounded-lg shadow-inner content-section-background hidden">
+            <h2 class="section-title mb-4">Employee Reports</h2>
+
+            <!-- Date Range Filter for Reports -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded-lg shadow-inner bg-gray-50">
+                <div>
+                    <label for="reportStartDateInput" class="block text-sm font-medium text-gray-700">Report Start Date</label>
+                    <input type="date" id="reportStartDateInput" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
+                </div>
+                <div>
+                    <label for="reportEndDateInput" class="block text-sm font-medium text-gray-700">Report End Date</label>
+                    <input type="date" id="reportEndDateInput" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
+                </div>
+            </div>
+
+            <!-- First 10 Employees Report -->
+            <div id="first10EmployeesReportSection" class="mb-8 p-6 rounded-lg shadow-inner content-section-background">
+                <h3 class="text-xl font-semibold mb-3 section-title">First 10 Employees Overview</h3>
+                <div class="overflow-x-auto">
+                    <table id="first10EmployeesTable" class="min-w-full divide-y divide-gray-200 rounded-lg overflow-hidden">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Employee ID/Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Customers</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Sim Cards Issued</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Apps Issued</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Sim Cards Topped Up</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">M-Banking Activated</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">App Transactions</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Sim/App Performance</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">Top-up/M-Banking Performance</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">App Transaction Performance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="first10EmployeesTableBody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="10" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center italic">No employee data available.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Search Employee Report -->
+            <div id="searchEmployeeReportSection" class="mb-8 p-6 rounded-lg shadow-inner content-section-background">
+                <h3 class="text-xl font-semibold mb-3 section-title">Search Individual Employee Report</h3>
+                <div class="flex flex-col md:flex-row items-center justify-center space-y-4 md:space-y-0 md:space-x-4">
+                    <select id="employeeSelect" class="mt-1 block w-full md:w-auto px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <option value="">Select an Employee</option>
+                        <!-- Options populated by JS -->
+                    </select>
+                    <button id="viewEmployeeReportBtn" class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-300 ease-in-out" disabled>
+                        View Report
+                    </button>
+                    <button id="exportEmployeeReportBtn" class="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-300 ease-in-out hidden" disabled>
+                        Export Report 📄
+                    </button>
+                </div>
+            </div>
+
+            <!-- Individual Employee Report Display -->
+            <div id="individualEmployeeReportDisplay" class="mb-8 p-6 rounded-lg shadow-inner content-section-background hidden">
+                <h3 id="individualEmployeeReportTitle" class="text-2xl font-bold text-center mb-4 text-gray-800"></h3>
+                <div id="employeeReportContent" class="text-gray-700">
+                    <p class="mb-2"><strong class="text-gray-900">Report Period:</strong> <span id="reportPeriod">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">Total Customers:</strong> <span id="reportTotalCustomers">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">Sim Cards Issued:</strong> <span id="reportSimCardsIssued">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">Apps Issued:</strong> <span id="reportAppsIssued">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">Sim Cards Topped Up:</strong> <span id="reportSimCardsToppedUp">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">M-Banking Activated:</strong> <span id="reportMBankingActivated">N/A</span></p>
+                    <p class="mb-4"><strong class="text-gray-900">App Transactions:</strong> <span id="reportAppTransactions">N/A</span></p>
+
+                    <h4 class="text-xl font-semibold mb-2 section-title">Performance Classifications:</h4>
+                    <p class="mb-2"><strong class="text-gray-900">Sim/App Issuance:</strong> <span id="reportSimAppPerformance" class="font-semibold">N/A</span></p>
+                    <p class="mb-2"><strong class="text-gray-900">Top-up/M-Banking Activation:</strong> <span id="reportTopUpMBankingPerformance" class="font-semibold">N/A</span></p>
+                    <p class="mb-4"><strong class="text-gray-900">App Transaction:</strong> <span id="reportAppTransactionPerformance" class="font-semibold">N/A</span></p>
+
+                    <h4 class="text-xl font-semibold mb-2 section-title">AI Insights: General Employee Performance</h4>
+                    <div id="aiGeneralPerformance" class="p-4 rounded-lg shadow-inner bg-gray-50 mb-4">
+                        <p id="aiGeneralPerformanceText" class="whitespace-pre-wrap text-sm text-gray-800">Click "Get AI Insights" to generate performance summary.</p>
+                        <div id="aiGeneralPerformanceLoading" class="loading-spinner hidden"></div>
+                    </div>
+                    <button id="getAIGeneralPerformanceBtn" class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-300 ease-in-out mb-4">
+                        Get AI Insights
+                    </button>
+
+                    <h4 class="text-xl font-semibold mb-2 section-title">AI Insights: Employee Performance Comparison</h4>
+                    <div id="aiEmployeePerformance" class="p-4 rounded-lg shadow-inner bg-gray-50 mb-4">
+                        <p id="aiEmployeePerformanceText" class="whitespace-pre-wrap text-sm text-gray-800">Click "Get AI Insights" to generate employee performance comparison.</p>
+                        <div id="aiEmployeePerformanceLoading" class="loading-spinner hidden"></div>
+                    </div>
+                    <button id="getAIEmployeePerformanceBtn" class="px-6 py-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-300 ease-in-out">
+                        Get AI Insights
+                    </button>
+                </div>
             </div>
         </div>
 

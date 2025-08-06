@@ -1,0 +1,54 @@
+### CSV Data Analyzer
+
+This project is a web-based application designed to upload, analyze, and visualize data from CSV files. It features several dedicated pages for different types of analysis, including general data exploration, time-series analysis, and performance reports for branches and employees.
+
+---
+
+### Key Features
+
+* **CSV Upload and Data Display**: The application allows users to upload a CSV file and view its contents and summary statistics on the main page.
+* **Time-Series Analysis**: A dedicated page for analyzing and visualizing data with a time component, featuring date filtering options.
+* **Complex Statistical Analysis**: A page to perform advanced statistical computations like correlation matrices and multiple linear regression (MLR).
+* **Performance Reporting**:
+    * **Branches**: Analyze branch-specific data, with reports for top 10 branches and AI-powered insights.
+    * **Employees**: Generate performance reports for the top 10 employees and individual employees with AI-powered insights.
+* **Data Persistence**: Uses IndexedDB to manage data, allowing for the storage of parsed CSV data and saved chart configurations.
+* **Modular Architecture**: The codebase is organized into several modules, each handling a specific part of the application logic (e.g., UI, charting, data handling).
+
+---
+
+### Project Structure
+
+├── index.html
+├── home.js
+├── time-series.html
+├── time-series.js
+├── branches.html
+├── branches.js
+├── complex_stats.html
+├── complex_stats.js
+├── employees.html
+├── employees.js
+├── charting.js
+├── data-handlers.js
+├── main.js
+├── style.css
+├── ui-components.js
+└── worker.js
+
+---
+
+### File Descriptions
+
+* `index.html`: The core landing page for uploading CSV files and performing initial data exploration and plotting.
+* `home.js`: Contains the JavaScript logic for the home page, including CSV parsing, data table rendering, and basic charting.
+* `time-series.html` / `time-series.js`: The HTML and JavaScript files for the time-series analysis page.
+* `branches.html` / `branches.js`: The HTML and JavaScript for the branch performance analysis dashboard.
+* `complex_stats.html` / `complex_stats.js`: The HTML and JavaScript for the complex statistical analysis page, handling correlation and MLR calculations.
+* `employees.html` / `employees.js`: The HTML and JavaScript for the employee performance analysis page.
+* `main.js`: The central orchestrator of the application, importing all other modules and setting up event listeners and global variables. This is the main entry point for the application's logic.
+* `data-handlers.js`: Manages all data-related tasks, including CSV parsing, data storage in IndexedDB, and interactions with the database.
+* `charting.js`: Handles all plotting and charting logic using Chart.js, including rendering different chart types, clearing chart instances, and performing data aggregation for charts.
+* `ui-components.js`: A utility file that contains reusable functions for displaying UI elements like pop-up messages, alerts, and confirmation prompts.
+* `style.css`: Defines the overall visual style and layout of the application, including fonts, colors, and responsive design elements.
+* `worker.js`: Implements the Service Worker for the application, enabling caching of files to support PWA functionality and offline access.

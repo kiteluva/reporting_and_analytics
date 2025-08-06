@@ -7,7 +7,7 @@ import { parsedData, headers, saveSavedChart, loadSavedCharts, deleteSavedChartB
 import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 
 // --- IMPORTANT: Define your deployed backend proxy server URL here ---
-const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app';
+const PROXY_SERVER_URL = 'https://csv-xls-data-analyzer.onrender.com';
 
 // --- DOM Elements specific to branches.html ---
 const xAxisFilterInput = document.getElementById('xAxisFilterInput'); // Example: for branch filtering
@@ -642,7 +642,7 @@ async function getAIEmployeePerformance() {
         chatHistory.push({ role: "user", parts: [{ text: prompt }] });
         const payload = { contents: chatHistory };
 
-        const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, {
+        const response = await fetch(`${PROXY_SERVER_URL}/ai-insights`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

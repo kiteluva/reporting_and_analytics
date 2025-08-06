@@ -11,7 +11,7 @@ import { dataReadyPromise } from './main.js'; // Import dataReadyPromise
 // This URL points to your Vercel-deployed backend proxy server.
 // It should be the same URL as defined in main.js.
 // Using the stable root domain provided by Vercel for your project.
-const PROXY_SERVER_URL = 'https://reporting0and0analytics.vercel.app';
+const PROXY_SERVER_URL = 'https://csv-xls-data-analyzer.onrender.com';
 
 
 // --- DOM Elements specific to complex_stats.html ---
@@ -320,7 +320,7 @@ async function getAIInterpretationForRegression() {
         // --- IMPORTANT: Call your deployed backend proxy server ---
         // The URL provided is a specific deployment URL. If your Vercel project has a more stable
         // root domain (e.g., 'https://your-project-name.vercel.app'), it's recommended to use that.
-        const response = await fetch(`${PROXY_SERVER_URL}/api/gemini-chat`, { // <-- UPDATED LINE
+        const response = await fetch(`${PROXY_SERVER_URL}/ai-insights`, { // <-- UPDATED LINE
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: regressionSummary }) // Send the regression summary to your proxy
